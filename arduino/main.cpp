@@ -113,7 +113,7 @@ void globalConfig_fromFile(void)
   dataFile.close();
   ESP_LOGV("DEBUG", "success");
 }
-void onErTask(void *sendptr)
+void sendErTask(void *sendptr)
 {
   ESP_LOGV("start", "");
   send_t send = (send_t)sendptr;
@@ -245,7 +245,7 @@ void webServerCreate(void)
 {
   sendEr_set("webServer");
   webServerTaskPtr.taskindex = &taskindex;
-  webServerTaskPtr.onErTaskFun = onErTask;
+  webServerTaskPtr.sendErTaskFun = sendErTask;
   webServerTaskPtr.config = globalConfig["webServer"].as<JsonObject>();
   if (pdPASS != xTaskCreate(webServerFun::taskA, "webServerTask", 1024 * 6, (void *)&webServerTaskPtr, taskindex++, NULL))
   {
@@ -293,7 +293,7 @@ void serialOnServerCreate(void)
 {
   sendEr_set("serialOnServer");
   serialServerTaskPtr.taskindex = &taskindex;
-  serialServerTaskPtr.onErTaskFun = onErTask;
+  serialServerTaskPtr.sendErTaskFun = sendErTask;
   serialFun::onTaskACreate(&serialServerTaskPtr);
 }
 void dz003TaskCreate(void)
