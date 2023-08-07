@@ -1,10 +1,13 @@
-#ifndef Dz003_h
-#define Dz003_h
+#ifndef dz003Tasknamespace_h
+#define dz003Tasknamespace_h
 #include <ETH.h> //引用以使用ETH
 #include <Arduino.h>
 #include <esp_log.h>
 #include <ArduinoJson.h>
+#include <esp_log.h>
 #include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <freertos/event_groups.h>
 #define ETH_ADDR 1
 #define ETH_POWER_PIN -1
 #define ETH_MDC_PIN 23
@@ -26,7 +29,7 @@ strcat(&data,(uint8_t*)"123");
 data="";
 memset(&data,0,sizeof(data));
 */
-namespace dz003
+namespace dz003Tasknamespace
 {
    void eth_begin()
    {
@@ -146,12 +149,12 @@ namespace dz003
       laba_set(!c);
       deng_set(!c);
    }
-   String state0;
-   void stateSend(void (*send)(String))
+
+   String getstate(String apiname)
    {
       DynamicJsonDocument doc(1024);
       JsonArray root = doc.to<JsonArray>();
-      root[0].set(state0);
+      root[0].set(apiname);
       JsonObject api = root.createNestedObject();
       JsonObject c1 = api.createNestedObject("fa");
       c1["working"] = fa.working;
@@ -183,20 +186,19 @@ namespace dz003
 
       String output;
       serializeJson(doc, output);
-      send(output);
+      return output;
    }
    typedef struct
    {
       JsonArray config;
-      void (*sendFun)(String);
-   } taskPtr_t;
+      TaskHandle_t send_handle;
+   } taskParam_t;
    void taskA(void *ptr)
    {
-      taskPtr_t *c = (taskPtr_t *)ptr;
-      state0 = "dz003.taskA";
+      taskParam_t *c = (taskParam_t *)ptr;
       work_set(true);
       TickType_t ticksCount = xTaskGetTickCount();
-      ESP_LOGV("start", "");
+      String state;
       for (;;)
       {
          int v0 = frequency.value[0];
@@ -206,17 +208,17 @@ namespace dz003
          {
             work_set(false);
          }
-         stateSend(c->sendFun);
+         state = getstate("taskA.state");
+         xTaskNotify(c->send_handle, (uint32_t)&state, eSetValueWithOverwrite);
          frequency_valueset0();
          vTaskDelayUntil(&ticksCount, c->config[1].as<int>());
       }
    }
-   
+
    // std::numeric_limits<int>::max() - 20000;
    void taskB(void *ptr)
    {
-      taskPtr_t *c = (taskPtr_t *)ptr;
-      state0 = "dz003.taskB";
+      taskParam_t *c = (taskParam_t *)ptr;
       work_set(true);
       TickType_t ticksCount = xTaskGetTickCount();
       int *v0v1abs = &frequency.log[0];
@@ -226,16 +228,18 @@ namespace dz003
       int *loopNumber = &frequency.log[2];
       (*loopNumber) = 0;
       ESP_LOGV("start", "");
+      String state;
       for (;;)
       {
-         (*loopNumber)+= 1;
+         (*loopNumber) += 1;
          (*v0v1abs) = abs(frequency.value[0] - frequency.value[1]);
          (*v0v1absLoop) += (*v0v1abs);
          if ((*v0v1abs) > c->config[0].as<int>() || (*v0v1absLoop) > c->config[1].as<int>())
          {
             work_set(false);
          }
-         stateSend(c->sendFun);
+         state = getstate("taskA.state");
+         xTaskNotify(c->send_handle, (uint32_t)&state, eSetValueWithOverwrite);
          frequency_valueset0();
          if ((*loopNumber) > c->config[2].as<int>())
          {

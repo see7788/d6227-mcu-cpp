@@ -14,7 +14,6 @@ namespace webServerFun
   AsyncWebSocket wsServer("/ws");
   void send(String str)
   {
-    //   if (xEventGroupGetBits(eg_Handle) & wsServer_bit)
     wsServer.textAll(str);
   }
   TaskHandle_t wsOnTask_Handle;
