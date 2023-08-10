@@ -7,7 +7,7 @@
 #include <esp_log.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
-#include <freertos/event_groups.h>
+#include <structTypenamespace.h>
 #define ETH_ADDR 1
 #define ETH_POWER_PIN -1
 #define ETH_MDC_PIN 23
@@ -150,11 +150,12 @@ namespace dz003Tasknamespace
       deng_set(!c);
    }
 
-   String getstate(String apiname)
+   String state(void)
    {
       DynamicJsonDocument doc(1024);
+      String msg;
       JsonArray root = doc.to<JsonArray>();
-      root[0].set(apiname);
+      root[0].set("dz003State");
       JsonObject api = root.createNestedObject();
       JsonObject c1 = api.createNestedObject("fa");
       c1["working"] = fa.working;
@@ -183,70 +184,67 @@ namespace dz003Tasknamespace
       JsonArray dengread = c4.createNestedArray("digitalRead");
       dengread.add(digitalRead(deng.gpio[0]));
       dengread.add(digitalRead(deng.gpio[1]));
-
-      String output;
-      serializeJson(doc, output);
-      return output;
+      serializeJson(doc, msg);
+      return msg;
    }
    typedef struct
    {
       JsonArray config;
-      TaskHandle_t send_handle;
+      const char *sendTo_name;
+      TaskHandle_t sendTo_taskHandle;
    } taskParam_t;
    void taskA(void *ptr)
    {
-      taskParam_t *c = (taskParam_t *)ptr;
+      taskParam_t c = *(taskParam_t *)ptr;
       work_set(true);
       TickType_t ticksCount = xTaskGetTickCount();
-      String state;
+      structTypenamespace::notifyString_t obj = {c.sendTo_name, "[\"dz003State\"]"};
       for (;;)
       {
          int v0 = frequency.value[0];
          int v1 = frequency.value[1];
-         int cabs = c->config[0].as<int>();
+         int cabs = c.config[0].as<int>();
          if (abs(v0 - v1) > cabs)
          {
             work_set(false);
          }
-         state = getstate("taskA.state");
-         xTaskNotify(c->send_handle, (uint32_t)&state, eSetValueWithOverwrite);
+         xTaskNotify(c.sendTo_taskHandle, (uint32_t)&obj, eSetValueWithOverwrite);
          frequency_valueset0();
-         vTaskDelayUntil(&ticksCount, c->config[1].as<int>());
+         vTaskDelayUntil(&ticksCount, c.config[1].as<int>());
       }
    }
 
    // std::numeric_limits<int>::max() - 20000;
    void taskB(void *ptr)
    {
-      taskParam_t *c = (taskParam_t *)ptr;
+      taskParam_t c = *(taskParam_t *)ptr;
       work_set(true);
       TickType_t ticksCount = xTaskGetTickCount();
-      int *v0v1abs = &frequency.log[0];
-      (*v0v1abs) = 0;
-      int *v0v1absLoop = &frequency.log[1];
-      (*v0v1absLoop) = 0;
-      int *loopNumber = &frequency.log[2];
-      (*loopNumber) = 0;
-      ESP_LOGV("start", "");
-      String state;
+      int &v0v1abs = frequency.log[0];
+      v0v1abs = 0;
+      int &v0v1absLoop = frequency.log[1];
+      v0v1absLoop = 0;
+      int &loopNumber = frequency.log[2];
+      loopNumber = 0;
+      static structTypenamespace::notifyString_t obj = {c.sendTo_name, "[\"dz003State\"]"};
       for (;;)
       {
-         (*loopNumber) += 1;
-         (*v0v1abs) = abs(frequency.value[0] - frequency.value[1]);
-         (*v0v1absLoop) += (*v0v1abs);
-         if ((*v0v1abs) > c->config[0].as<int>() || (*v0v1absLoop) > c->config[1].as<int>())
+         //ESP_LOGV("debug","%s",obj.msg.c_str());
+         loopNumber += 1;
+         v0v1abs = abs(frequency.value[0] - frequency.value[1]);
+         v0v1absLoop += v0v1abs;
+         if (v0v1abs > c.config[0].as<int>() || v0v1absLoop > c.config[1].as<int>())
          {
             work_set(false);
          }
-         state = getstate("taskA.state");
-         xTaskNotify(c->send_handle, (uint32_t)&state, eSetValueWithOverwrite);
+         xTaskNotify(c.sendTo_taskHandle, (uint32_t)&obj, eSetValueWithOverwrite);
          frequency_valueset0();
-         if ((*loopNumber) > c->config[2].as<int>())
+         if (loopNumber > c.config[2].as<int>())
          {
-            (*loopNumber) = 0;
-            (*v0v1absLoop) = 0;
+            loopNumber = 0;
+            v0v1absLoop = 0;
          }
-         vTaskDelayUntil(&ticksCount, c->config[3].as<int>());
+         vTaskDelayUntil(&ticksCount, c.config[3].as<int>());
       }
    }
 };

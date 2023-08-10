@@ -1,24 +1,23 @@
 import shutil
 import os
-import runpy
+import subprocess
 Import("env")
-
-
+# print(env.Dump())
 if (len(BUILD_TARGETS) == 0 or "upload" in BUILD_TARGETS):
     try:
+        result = subprocess.run(['where', 'platformio'], capture_output=True, text=True)
+        output_lines = result.stdout.splitlines()
         mcuPath = env.get("PROJECT_DIR")
         srcFilePath=os.path.abspath(mcuPath+"/../d6227-mcu-ts/src/config.json")
         saveFilePath=os.path.abspath(mcuPath+"/data/config.json")
-        print("srcFilePath=%s;saveFilePath=%s" % (srcFilePath, saveFilePath))
         if os.path.exists(saveFilePath):
             os.remove(saveFilePath)
         msg=shutil.copyfile(srcFilePath,saveFilePath)
-        print(msg)
-        p = "C:\\Users\\13520\\.platformio\\penv\\Scripts\\platformio.exe run --target"
-        os.system('"' + p + ' buildfs"')
-        os.system('"'+p+' size"')
-        os.system('"' + p + ' uploadfs"')
+        p= output_lines[0]+" run --target "
+        os.system('"' + p + 'buildfs"')
+        os.system('"'+p+'size"')
+        os.system('"' + p + 'uploadfs"') 
     except Exception as e:
-        print(e + 'uploadFs error')
+        print(e)
     finally:
-        print("uploadfs success")
+        print("\n\n\nuploadfs success;srcFilePath=%s;saveFilePath=%s;copy msg=%s;exe path=%s\n\n\n" % (srcFilePath, saveFilePath,msg,p))

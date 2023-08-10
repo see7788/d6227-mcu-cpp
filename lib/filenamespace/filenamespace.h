@@ -1,9 +1,9 @@
-#ifndef fileOsFun_h
-#define fileOsFun_h
+#ifndef filenamespace_h
+#define filenamespace_h
 #include <FS.h>
 #include <SPIFFS.h>
 #include <ArduinoJson.h>
-namespace fileOsFun
+namespace filenamespace
 {
     // listFilePrint::listFile(fileOs, "/", 0);
     void listFilePrint(fs::FS &fs, const char *dirname, uint8_t levels)

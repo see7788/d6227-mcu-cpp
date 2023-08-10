@@ -1,0 +1,43 @@
+{
+    "env": {
+        "packageName": "d6227-mcu-ts"
+    },
+    "server": {
+        "dz003": {
+            "init": "taskB",
+            "sendTo_name": "server_serial",
+            "taskA": [
+                1000,
+                3000
+            ],
+            "taskB": [
+                50,
+                5000,
+                20000,
+                2000
+            ]
+        },
+        "net": {
+            "init": "eth",
+            "ap": [
+                "8.8.8.8",
+                "1352Ap"
+            ],
+            "sta": [
+                "shuzijia",
+                "80508833"
+            ]
+        },
+        "serial": [
+            "server_serial",
+            9600
+        ]
+    },
+    "client": {
+        "serial": [
+            "server_serial",
+            9600
+        ],
+        "html": "http://39.97.216.195:8083/index.html?wsIp="
+    }
+}
