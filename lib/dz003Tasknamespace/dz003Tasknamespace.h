@@ -190,46 +190,27 @@ namespace dz003Tasknamespace
    typedef struct
    {
       JsonArray config;
-      const char *sendTo_name;
       TaskHandle_t sendTo_taskHandle;
    } taskParam_t;
-   void taskA(void *ptr)
-   {
-      taskParam_t c = *(taskParam_t *)ptr;
-      work_set(true);
-      TickType_t ticksCount = xTaskGetTickCount();
-      structTypenamespace::notifyString_t obj = {c.sendTo_name, "[\"dz003State\"]"};
-      for (;;)
-      {
-         int v0 = frequency.value[0];
-         int v1 = frequency.value[1];
-         int cabs = c.config[0].as<int>();
-         if (abs(v0 - v1) > cabs)
-         {
-            work_set(false);
-         }
-         xTaskNotify(c.sendTo_taskHandle, (uint32_t)&obj, eSetValueWithOverwrite);
-         frequency_valueset0();
-         vTaskDelayUntil(&ticksCount, c.config[1].as<int>());
-      }
-   }
-
    // std::numeric_limits<int>::max() - 20000;
-   void taskB(void *ptr)
+   void mainTask(void *ptr)
    {
       taskParam_t c = *(taskParam_t *)ptr;
-      work_set(true);
+      const char *sendTo_name = c.config[4].as<const char *>();
       TickType_t ticksCount = xTaskGetTickCount();
+      work_set(true);
       int &v0v1abs = frequency.log[0];
       v0v1abs = 0;
       int &v0v1absLoop = frequency.log[1];
       v0v1absLoop = 0;
       int &loopNumber = frequency.log[2];
       loopNumber = 0;
-      static structTypenamespace::notifyString_t obj = {c.sendTo_name, "[\"dz003State\"]"};
+      structTypenamespace::notifyString_t *obj = new structTypenamespace::notifyString_t();
+      obj->sendTo_name=sendTo_name;
+      obj->msg="[\"dz003State\"]";
       for (;;)
       {
-         //ESP_LOGV("debug","%s",obj.msg.c_str());
+         // ESP_LOGV("debug","%s",obj.msg.c_str());
          loopNumber += 1;
          v0v1abs = abs(frequency.value[0] - frequency.value[1]);
          v0v1absLoop += v0v1abs;
@@ -237,7 +218,8 @@ namespace dz003Tasknamespace
          {
             work_set(false);
          }
-         xTaskNotify(c.sendTo_taskHandle, (uint32_t)&obj, eSetValueWithOverwrite);
+         ESP_LOGE("DEBUE", "%s", obj->sendTo_name);
+         xTaskNotify(c.sendTo_taskHandle, (uint32_t)obj, eSetValueWithOverwrite);
          frequency_valueset0();
          if (loopNumber > c.config[2].as<int>())
          {
@@ -245,6 +227,7 @@ namespace dz003Tasknamespace
             v0v1absLoop = 0;
          }
          vTaskDelayUntil(&ticksCount, c.config[3].as<int>());
+         // vTaskDelayUntil(&ticksCount, 3000);
       }
    }
 };

@@ -3,20 +3,13 @@
         "packageName": "d6227-mcu-ts"
     },
     "server": {
-        "dz003": {
-            "init": "taskB",
-            "sendTo_name": "server_serial",
-            "taskA": [
-                1000,
-                3000
-            ],
-            "taskB": [
-                50,
-                5000,
-                20000,
-                2000
-            ]
-        },
+        "dz003":[
+            50,
+            5000,
+            20000,
+            2000,
+            "server_serial"
+        ],
         "net": {
             "init": "eth",
             "ap": [

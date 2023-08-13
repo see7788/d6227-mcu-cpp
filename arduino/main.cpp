@@ -14,61 +14,65 @@
 #include <ESPAsyncWebServer.h>
 #include <AsyncWebSocket.h>
 #include <structTypenamespace.h>
-#include "serialTasknamespace.h"
-#include "dz003Tasknamespace.h"
-#include "filenamespace.h"
+#include <serialTasknamespace.h>
+#include <dz003Tasknamespace.h>
+#include <filenamespace.h>
 #define fileOs SPIFFS
 #define uartDef Serial
-#define net_bit (1 << 0)
+#define EGBIG_CONFIG (2 << 0)
+#define EGBIG_NET (1 << 0)
 int taskindex = 0;
 EventGroupHandle_t eg_Handle = xEventGroupCreate();
-String globalFilePath = "/config.json";
-TaskHandle_t resJsonArray_TaskHandle, resStr_TaskHandle, server_serial_TaskHandle, server_net_TaskHandle, server_dz003_TaskHandle;
+String GLOBALFILEPATH = "/config.json";
+TaskHandle_t parsejsonStringSend_TaskHandle, parseJsonArraySend_TaskHandle, server_serial_TaskHandle, server_dz003_TaskHandle;
 static StaticJsonDocument<3000> globalConfig;
 void globalConfig_fromFile(void)
 {
-  ESP_LOGV("end", "start");
   if (!fileOs.begin(true))
   {
     ESP_LOGV("DEBUE", "!fileOs.begin(true)");
     return;
   }
-  if (!fileOs.exists(globalFilePath))
+  if (!fileOs.exists(GLOBALFILEPATH))
   {
-    ESP_LOGV("DEBUE", " !fileOs.exists(globalFilePath)");
+    ESP_LOGV("DEBUE", " !fileOs.exists(GLOBALFILEPATH)");
     return;
   }
-  File dataFile = fileOs.open(globalFilePath);
-  deserializeJson(globalConfig, dataFile);
-  // serializeJson(globalConfig, uartDef);//
-  serializeJsonPretty(globalConfig, uartDef);
+  File dataFile = fileOs.open(GLOBALFILEPATH);
+  DeserializationError error = deserializeJson(globalConfig, dataFile);
   dataFile.close();
-  ESP_LOGV("end", "success");
+  if (error)
+  {
+    ESP_LOGV("DEBUE", "Error deserializing JSON:%s", error.c_str());
+    return;
+  }
+  xEventGroupSetBits(eg_Handle, EGBIG_CONFIG);
+  serializeJson(globalConfig, uartDef);
+  //  serializeJsonPretty(globalConfig, uartDef);
 }
 void esp_eg_on(void *registEr, esp_event_base_t postEr, int32_t eventId, void *eventData)
 {
-  // EventBits_t bits = xEventGroupWaitBits(eg_Handle, net_bit | net_bit | dz003_bit, pdFALSE, pdTRUE, portMAX_DELAY);
-  // xEventGroupSetBits(eg_Handle, net_bit);
-  // xEventGroupClearBits(myEventGroup, net_bit | BIT_2);
+  // EventBits_t bits = xEventGroupWaitBits(eg_Handle, EGBIG_NET | EGBIG_NET | dz003_bit, pdFALSE, pdTRUE, portMAX_DELAY);
+  // xEventGroupClearBits(eg_Handle, EGBIG_NET | BIT_2);
   char *er = (char *)registEr;
   int use = 0;
   if (postEr == IP_EVENT && eventId == 4)
   {
     ESP_LOGV("DEBUG", "ETH.localIP:%s", ETH.localIP().toString().c_str());
-    xEventGroupSetBits(eg_Handle, net_bit);
+    xEventGroupSetBits(eg_Handle, EGBIG_NET);
     use = 1;
   }
   else if (postEr == IP_EVENT && eventId == 0)
   {
     ESP_LOGV("DEBUG", "WiFi.localIP:%s", WiFi.localIP().toString().c_str());
-    xEventGroupSetBits(eg_Handle, net_bit);
+    xEventGroupSetBits(eg_Handle, EGBIG_NET);
     use = 1;
   }
   // char *data = eventData ? ((char *)eventData) : ((char *)"");
   // ESP_LOGV("DEBUG", "registEr:%s,use:%d,postEr:%s, eventId:%d,eventData:%s", er, use, postEr, eventId, (char *)eventData);
   ESP_LOGV("DEBUG", "registEr:%s,use:%d,postEr:%s, eventId:%d", er, use, postEr, eventId);
 }
-void espTask(void *nullparam)
+void server_esp(void)
 {
   ESP_LOGV("getFreeHeap", "%d", ESP.getFreeHeap(), ESP_OK);
   ESP_ERROR_CHECK(esp_task_wdt_init(20000, false)); // 初始化看门狗
@@ -81,7 +85,6 @@ void espTask(void *nullparam)
   ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, ESP_EVENT_ANY_ID, esp_eg_on, (void *)__func__));
   ESP_ERROR_CHECK(esp_event_handler_register(ETH_EVENT, ESP_EVENT_ANY_ID, esp_eg_on, (void *)__func__));
   ESP_ERROR_CHECK(esp_event_handler_register(SC_EVENT, ESP_EVENT_ANY_ID, esp_eg_on, (void *)__func__));
-  vTaskDelete(NULL);
 }
 void sendEr(structTypenamespace::notifyString_t *strObj)
 {
@@ -91,10 +94,11 @@ void sendEr(structTypenamespace::notifyString_t *strObj)
   }
   else
   {
-    ESP_LOGV("SendNull", "%s", strObj->msg.c_str());
+    strObj->msg = "sendTo_name undefind";
+    serialTasknamespace::send(strObj->msg);
   }
 }
-void apiSendEr(structTypenamespace::notifyJsonArray_t *arrObj)
+void parseJsonArraySend(structTypenamespace::notifyJsonArray_t *arrObj)
 {
   JsonArray doc = arrObj->msg;
   String api = doc[0].as<String>();
@@ -117,7 +121,7 @@ void apiSendEr(structTypenamespace::notifyJsonArray_t *arrObj)
   }
   else if (api == "config_toFile")
   {
-    File file = fileOs.open(globalFilePath, "w");
+    File file = fileOs.open(GLOBALFILEPATH, "w");
     serializeJson(globalConfig, file);
     file.close();
     msg = "[\"config_toFile\"]";
@@ -182,53 +186,57 @@ void apiSendEr(structTypenamespace::notifyJsonArray_t *arrObj)
   }
   else
   {
-    msg = "[\"mcu pass api:" + api + "\"]";
+    msg = "[\"mcu pass\",\"" + api + "\"]";
   }
   structTypenamespace::notifyString_t strObj = {arrObj->sendTo_name, msg};
   sendEr(&strObj);
 }
-void resJsonArray_Task(void *nullparam)
+void parseStringSend(structTypenamespace::notifyString_t *strObj)
+{
+  DynamicJsonDocument doc(3000);
+  DeserializationError error = deserializeJson(doc, strObj->msg);
+  if (error)
+  {
+    strObj->msg = "[\"json pase error\",\"" + String(error.c_str()) + "\"]";
+    sendEr(strObj);
+  }
+  else
+  {
+    JsonArray arr = doc.as<JsonArray>();
+    structTypenamespace::notifyJsonArray_t arrObj = {strObj->sendTo_name, arr};
+    parseJsonArraySend(&arrObj);
+  }
+}
+void parseJsonArraySend_Task(void *nullparam)
 {
   uint32_t ptr;
-  structTypenamespace::notifyJsonArray_t *arrObj;
+  structTypenamespace::notifyJsonArray_t *arrObj ;//= new structTypenamespace::notifyJsonArray_t();
   for (;;)
   {
     if (xTaskNotifyWait(pdFALSE, ULONG_MAX, (uint32_t *)&ptr, portMAX_DELAY) == pdPASS)
     {
       arrObj = (structTypenamespace::notifyJsonArray_t *)ptr;
-      apiSendEr(arrObj);
+      parseJsonArraySend(arrObj);
       ulTaskNotifyValueClear(xTaskGetCurrentTaskHandle(), ptr); // 清除通知值
     }
   }
 }
-void resString_Task(void *nullparam)
+void parsejsonStringSend_Task(void *nullparam)
 {
   uint32_t ptr;
-  structTypenamespace::notifyString_t *strObj;
+  structTypenamespace::notifyString_t *strObj ;//= new structTypenamespace::notifyString_t();
   for (;;)
   {
     if (xTaskNotifyWait(pdFALSE, ULONG_MAX, (uint32_t *)&ptr, portMAX_DELAY) == pdPASS)
     {
       strObj = (structTypenamespace::notifyString_t *)ptr;
-      DynamicJsonDocument doc(3000);
-      DeserializationError error = deserializeJson(doc, strObj->msg);
-      if (error)
-      {
-        sendEr(strObj);
-        ESP_LOGV("resString_Task", "err");
-      }
-      else
-      {
-        ESP_LOGV("resString_Task", "success");
-        JsonArray arr = doc.as<JsonArray>();
-        structTypenamespace::notifyJsonArray_t arrObj = {strObj->sendTo_name, arr};
-        apiSendEr(&arrObj);
-      }
+      parseStringSend(strObj);
+      ESP_LOGE("DEBUE", "%s", strObj->sendTo_name);
       ulTaskNotifyValueClear(xTaskGetCurrentTaskHandle(), ptr); // 清除通知值
     }
   }
 }
-void server_net_Task(void *nullparam)
+void server_net(void)
 {
   // init:ap|sta|eth|ap+eth|ap+sta|
   JsonObject c = globalConfig["server"]["net"].as<JsonObject>();
@@ -265,42 +273,37 @@ void server_net_Task(void *nullparam)
     ESP_LOGE("debug", "init false");
   }
   ESP_LOGD("end", "%s", init.c_str());
-  vTaskDelete(NULL);
 }
-void server_dz003_Task()
+void server_serial(void)
 {
-  void (*taskFunc)(void *) = nullptr;
-  JsonObject config = globalConfig["server"]["dz003"].as<JsonObject>();
-  const char *init = config["init"].as<const char *>();
-  // ESP_LOGV("debug", "init=%s,sendto=%s", init, config["sendTo_name"].as<const char *>());
-  if (strcmp(init, "taskA") == 0)
-  {
-    taskFunc = dz003Tasknamespace::taskA;
-  }
-  else if (strcmp(init, "taskB") == 0)
-  {
-    taskFunc = dz003Tasknamespace::taskB;
-  }
-  else
-  {
-    ESP_LOGE("debug", "dz003::false ");
-  }
-  if (taskFunc != nullptr)
-  {
-    dz003Tasknamespace::taskParam_t param = {config[init].as<JsonArray>(), config["sendTo_name"].as<const char *>(), resStr_TaskHandle};
-    xTaskCreate(dz003Tasknamespace::taskB, "server_dz003_Task", 1024 * 6, (void *)&param, taskindex++, &server_dz003_TaskHandle);
-  }
+  Serial.onReceive([]()
+                   {
+     structTypenamespace::notifyString_t strObj = {
+      globalConfig["server"]["serial"][0].as<const char *>(),
+      Serial.readStringUntil('\n')
+      };
+  parseStringSend(&strObj); });
+}
+void server_dz003(void)
+{
+  JsonArray dz003 = globalConfig["server"]["dz003"].as<JsonArray>();
+  dz003Tasknamespace::taskParam_t param = {dz003, parsejsonStringSend_TaskHandle};
+  xTaskCreate(dz003Tasknamespace::mainTask, "server_dz003_Task", 1024 * 6, (void *)&param, taskindex++, &server_dz003_TaskHandle);
 }
 void setup(void)
 {
   uartDef.begin(115200);
-  xTaskCreate(espTask, "espTask", 1024 * 2, NULL, taskindex++, NULL);
+  server_esp();
   globalConfig_fromFile();
-  xTaskCreate(resString_Task, "resString_Task", 1024 * 10, NULL, taskindex++, &resStr_TaskHandle);
-  serialTasknamespace::onTaskParam_t server_serial_Param = {globalConfig["server"]["serial"][0].as<const char *>(), resStr_TaskHandle};
-  xTaskCreate(serialTasknamespace::onTask, "server_serial_Task", 1024 * 4, (void *)&server_serial_Param, taskindex++, &server_serial_TaskHandle);
-  xTaskCreate(server_net_Task, "server_net_Task", 1024 * 6, NULL, taskindex++, &server_net_TaskHandle);
-  server_dz003_Task();
+  xEventGroupWaitBits(eg_Handle, EGBIG_CONFIG, pdTRUE, pdTRUE, portMAX_DELAY);
+  ESP_LOGE("DEBUE", "%s", "---------------EGBIG_CONFIG  SUCCESS----------------");
+  xTaskCreate(parsejsonStringSend_Task, "parsejsonStringSend_Task", 1024 * 10, NULL, taskindex++, &parsejsonStringSend_TaskHandle);
+  xTaskCreate(parseJsonArraySend_Task, "parseJsonArraySend_Task", 1024 * 10, NULL, taskindex++, &parseJsonArraySend_TaskHandle);
+  server_serial();
+  server_net();
+  xEventGroupWaitBits(eg_Handle, EGBIG_NET, pdTRUE, pdTRUE, portMAX_DELAY);
+  server_dz003();
+  ESP_LOGE("DEBUE", "%s", "---------------EGBIG_NET SUCCESS------------------");
   // vTaskStartScheduler();
 }
 void loop(void)
