@@ -5,6 +5,8 @@
 #include <esp_log.h>
 #include <ArduinoJson.h>
 #include <esp_log.h>
+#include <tuple>
+#include <string>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <structTypenamespace.h>
@@ -187,16 +189,61 @@ namespace dz003Tasknamespace
       serializeJson(doc, msg);
       return msg;
    }
+
+   // typedef struct
+   // {
+   //    JsonArray config;
+   //    TaskHandle_t sendTo_taskHandle;
+   // } taskParam_t;
+   // // std::numeric_limits<int>::max() - 20000;
+   // void mainTask(void *ptr)
+   // {
+   //    taskParam_t c = *(taskParam_t *)ptr;
+   //    const char *sendTo_name = c.config[4].as<const char *>();
+   //    TickType_t ticksCount = xTaskGetTickCount();
+   //    // TickType_t ticksTime = pdMS_TO_TICKS(c.config[3].as<int>());
+   //    TickType_t ticksTime = pdMS_TO_TICKS(3000);
+   //    work_set(true);
+   //    int &v0v1abs = frequency.log[0];
+   //    v0v1abs = 0;
+   //    int &v0v1absLoop = frequency.log[1];
+   //    v0v1absLoop = 0;
+   //    int &loopNumber = frequency.log[2];
+   //    loopNumber = 0;
+   //    structTypenamespace::notifyString_t *obj = new structTypenamespace::notifyString_t();
+   //    obj->sendTo_name = sendTo_name;
+   //    obj->msg = "[\"dz003State\"]";
+   //    for (;;)
+   //    {
+   //       // ESP_LOGV("debug","%s",obj.msg.c_str());
+   //       loopNumber += 1;
+   //       v0v1abs = abs(frequency.value[0] - frequency.value[1]);
+   //       v0v1absLoop += v0v1abs;
+   //       if (v0v1abs > c.config[0].as<int>() || v0v1absLoop > c.config[1].as<int>())
+   //       {
+   //          work_set(false);
+   //       }
+   //       ESP_LOGE("DEBUE", "%s", sendTo_name);
+   //       ESP_LOGE("DEBUE", "%d", c.config[2].as<int>());
+   //       // xTaskNotify(c.sendTo_taskHandle, (uint32_t)obj, eSetValueWithOverwrite);
+   //       frequency_valueset0();
+   //       if (loopNumber > c.config[2].as<int>())
+   //       {
+   //          loopNumber = 0;
+   //          v0v1absLoop = 0;
+   //       }
+   //       vTaskDelayUntil(&ticksCount, ticksTime);
+   //    }
+   // }
    typedef struct
    {
-      JsonArray config;
+      std::tuple<int, int, int, int, std::string> config;
       TaskHandle_t sendTo_taskHandle;
    } taskParam_t;
    // std::numeric_limits<int>::max() - 20000;
    void mainTask(void *ptr)
    {
-      taskParam_t c = *(taskParam_t *)ptr;
-      const char *sendTo_name = c.config[4].as<const char *>();
+      taskParam_t *c = (taskParam_t *)ptr;
       TickType_t ticksCount = xTaskGetTickCount();
       work_set(true);
       int &v0v1abs = frequency.log[0];
@@ -206,28 +253,30 @@ namespace dz003Tasknamespace
       int &loopNumber = frequency.log[2];
       loopNumber = 0;
       structTypenamespace::notifyString_t *obj = new structTypenamespace::notifyString_t();
-      obj->sendTo_name=sendTo_name;
-      obj->msg="[\"dz003State\"]";
+      int &v0v1abs_c = std::get<0>(c->config);
+      int &v0v1absLoop_c = std::get<1>(c->config);
+      int &loopNumber_c = std::get<2>(c->config);
+      int &set0tick_c = std::get<3>(c->config);
+      obj->msg = "[\"dz003State\"]";
       for (;;)
       {
+         obj->sendTo_name = std::get<4>(c->config);
          // ESP_LOGV("debug","%s",obj.msg.c_str());
          loopNumber += 1;
          v0v1abs = abs(frequency.value[0] - frequency.value[1]);
          v0v1absLoop += v0v1abs;
-         if (v0v1abs > c.config[0].as<int>() || v0v1absLoop > c.config[1].as<int>())
+         if (v0v1abs > v0v1abs_c || v0v1absLoop > v0v1abs_c)
          {
             work_set(false);
          }
-         ESP_LOGE("DEBUE", "%s", obj->sendTo_name);
-         xTaskNotify(c.sendTo_taskHandle, (uint32_t)obj, eSetValueWithOverwrite);
+         xTaskNotify(c->sendTo_taskHandle, (uint32_t)obj, eSetValueWithOverwrite);
          frequency_valueset0();
-         if (loopNumber > c.config[2].as<int>())
+         if (loopNumber > loopNumber_c)
          {
             loopNumber = 0;
             v0v1absLoop = 0;
          }
-         vTaskDelayUntil(&ticksCount, c.config[3].as<int>());
-         // vTaskDelayUntil(&ticksCount, 3000);
+         vTaskDelayUntil(&ticksCount, pdMS_TO_TICKS(set0tick_c));
       }
    }
 };
