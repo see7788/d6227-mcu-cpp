@@ -15,11 +15,7 @@ namespace structTypenamespace
         std::string sendTo_name;
         JsonArray msg;
     } notifyJsonArray_t;
-    // typedef struct
-    // {
-    //     const char *sendTo_name;
-    //     char msg[3000];
-    // } notifyChar3000_t;
-
+    typedef void (*stdStringParse_t)(notifyString_t&);
+    typedef void (*jsonArrayParse_t)(notifyJsonArray_t&);
 }
 #endif
