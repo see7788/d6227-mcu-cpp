@@ -639,7 +639,7 @@ namespace a7129namespace
     } taskParam_t;
 
     int devMaxIndex = 0;
-    void use_end_data(void)
+    void yblUseData(void)
     {
         id_t id_vale = end_data[0] << 24 | end_data[1] << 16 | end_data[3] << 8 | end_data[4];
         if (useIds[0] != 0)
@@ -672,14 +672,14 @@ namespace a7129namespace
         }
     }
 
-    void handleInterrupt(void)
+    void yblInterrupt(void)
     {
         if (send_state == 1)
         {
             RxPacket();        // 接收数据,数据存放在A7129_RX_BUFF[],数组最多7个元素
             StrobeCMD(CMD_RX); // 设置为接收模式
             Data_Output(A7129_RX_BUFF, end_data);
-            use_end_data();
+            yblUseData();
         }
     }
 
@@ -734,7 +734,7 @@ namespace a7129namespace
         StrobeCMD(CMD_PLL);
         StrobeCMD(CMD_RX); // 设为接收模式
         pinMode(GIO1, INPUT_PULLUP);
-        attachInterrupt(GIO1, handleInterrupt, FALLING); // 创建中断
+        yblInterrupt(GIO1, handleInterrupt, FALLING); // 创建中断
         while (1)
         {
 
