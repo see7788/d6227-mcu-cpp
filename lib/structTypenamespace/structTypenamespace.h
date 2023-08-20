@@ -3,6 +3,7 @@
 #include <ArduinoJson.h>
 #include <Arduino.h>
 #include <string>
+#include <functional>
 namespace structTypenamespace
 {
     typedef struct
@@ -15,7 +16,8 @@ namespace structTypenamespace
         std::string sendTo_name;
         JsonArray msg;
     } notifyJsonArray_t;
-    typedef void (*stdStringParse_t)(notifyString_t&);
-    typedef void (*jsonArrayParse_t)(notifyJsonArray_t&);
+    typedef std::function<void(notifyString_t &)> stdStringParse_t;
+    typedef std::function<void(notifyJsonArray_t &)> jsonArrayParse_t;
+    typedef std::function<void(void)> callback;
 }
 #endif

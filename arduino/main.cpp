@@ -25,29 +25,29 @@
 #include <a7129namespace.h>
 // #define fileOs SPIFFS
 #define uartDef Serial
-// #define EGBIG_FILEOS (1 << 0)
-// #define EGBIG_CONFIG (2 << 0)
-// #define EGBIG_NET (3 << 0)
+#define EGBIG_FILEOS (1 << 0)
+#define EGBIG_CONFIG (2 << 0)
+#define EGBIG_NET (3 << 0)
 // AsyncWebServer *webServer;
 // AsyncWebSocket *wsServer;
-// typedef struct
-// {
-//   String packageName;
-//   String mcuId;
-//   String locIp;
-//   int taskindex;
-// } state_t;
-// state_t state;
-// typedef struct
-// {
-//   netnamespace::initParam_t server_net;
-//   a7129namespace::config_t server_ybl;
-//   dz003namespace::config_t server_dz003;
-//   std::tuple<std::string> server_html;
-//   std::tuple<std::string> client_html;
-// } config_t;
-// config_t config;
-// EventGroupHandle_t eg_Handle = xEventGroupCreate();
+typedef struct
+{
+  String packageName;
+  String mcuId;
+  String locIp;
+  int taskindex;
+} state_t;
+state_t state;
+typedef struct
+{
+  // netnamespace::initParam_t server_net;
+  a7129namespace::config_t server_ybl;
+  // dz003namespace::config_t server_dz003;
+  std::tuple<std::string> server_html;
+  std::tuple<std::string> client_html;
+} config_t;
+config_t config;
+EventGroupHandle_t eg_Handle = xEventGroupCreate();
 String GLOBALFILEPATH = "/config.json";
 // TaskHandle_t stdStringTaskHandle, jsonArrayTaskHandle, server_serialTaskHandle, server_dz003TaskHandle;
 // SemaphoreHandle_t globalConfigLock;
@@ -106,44 +106,44 @@ String GLOBALFILEPATH = "/config.json";
 //      //   serializeJsonPretty(globalConfig, uartDef);
 //    }
 //  }
-//  void esp_eg_on(void *registEr, esp_event_base_t postEr, int32_t eventId, void *eventData)
-//  {
-//    // EventBits_t bits = xEventGroupWaitBits(eg_Handle, EGBIG_NET | EGBIG_NET | dz003_bit, pdFALSE, pdTRUE, portMAX_DELAY);
-//    // xEventGroupClearBits(eg_Handle, EGBIG_NET | BIT_2);
-//    char *er = (char *)registEr;
-//    int use = 0;
-//    if (postEr == IP_EVENT && eventId == 4)
-//    {
-//      ESP_LOGV("DEBUG", "ETH.localIP:%s", ETH.localIP().toString().c_str());
-//      state.locIp = String(ETH.localIP());
-//      xEventGroupSetBits(eg_Handle, EGBIG_NET);
-//      use = 1;
-//    }
-//    else if (postEr == IP_EVENT && eventId == 0)
-//    {
-//      ESP_LOGV("DEBUG", "WiFi.localIP:%s", WiFi.localIP().toString().c_str());
-//      state.locIp = String(WiFi.localIP());
-//      xEventGroupSetBits(eg_Handle, EGBIG_NET);
-//      use = 1;
-//    }
-//    // char *data = eventData ? ((char *)eventData) : ((char *)"");
-//    // ESP_LOGV("DEBUG", "registEr:%s,use:%d,postEr:%s, eventId:%d,eventData:%s", er, use, postEr, eventId, (char *)eventData);
-//    ESP_LOGV("DEBUG", "registEr:%s,use:%d,postEr:%s, eventId:%d", er, use, postEr, eventId);
-//  }
-//  void server_esp(void)
-//  {
-//    ESP_LOGV("getFreeHeap", "%d", ESP.getFreeHeap(), ESP_OK);
-//    ESP_ERROR_CHECK(esp_task_wdt_init(20000, false)); // 初始化看门狗
-//    ESP_ERROR_CHECK(esp_task_wdt_add(NULL));
-//    ESP_ERROR_CHECK(esp_task_wdt_status(NULL));
-//    esp_task_wdt_add(xTaskGetIdleTaskHandleForCPU(0));
-//    esp_task_wdt_add(xTaskGetIdleTaskHandleForCPU(1));
-//    ESP_ERROR_CHECK(esp_event_loop_create_default());
-//    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, esp_eg_on, (void *)__func__));
-//    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, ESP_EVENT_ANY_ID, esp_eg_on, (void *)__func__));
-//    ESP_ERROR_CHECK(esp_event_handler_register(ETH_EVENT, ESP_EVENT_ANY_ID, esp_eg_on, (void *)__func__));
-//    ESP_ERROR_CHECK(esp_event_handler_register(SC_EVENT, ESP_EVENT_ANY_ID, esp_eg_on, (void *)__func__));
-//  }
+// void esp_eg_on(void *registEr, esp_event_base_t postEr, int32_t eventId, void *eventData)
+// {
+//   // EventBits_t bits = xEventGroupWaitBits(eg_Handle, EGBIG_NET | EGBIG_NET | dz003_bit, pdFALSE, pdTRUE, portMAX_DELAY);
+//   // xEventGroupClearBits(eg_Handle, EGBIG_NET | BIT_2);
+//   char *er = (char *)registEr;
+//   int use = 0;
+//   if (postEr == IP_EVENT && eventId == 4)
+//   {
+//     // ESP_LOGV("DEBUG", "ETH.localIP:%s", ETH.localIP().toString().c_str());
+//     // state.locIp = String(ETH.localIP());
+//     xEventGroupSetBits(eg_Handle, EGBIG_NET);
+//     use = 1;
+//   }
+//   else if (postEr == IP_EVENT && eventId == 0)
+//   {
+//     ESP_LOGV("DEBUG", "WiFi.localIP:%s", WiFi.localIP().toString().c_str());
+//     // state.locIp = String(WiFi.localIP());
+//     xEventGroupSetBits(eg_Handle, EGBIG_NET);
+//     use = 1;
+//   }
+//   // char *data = eventData ? ((char *)eventData) : ((char *)"");
+//   // ESP_LOGV("DEBUG", "registEr:%s,use:%d,postEr:%s, eventId:%d,eventData:%s", er, use, postEr, eventId, (char *)eventData);
+//   ESP_LOGV("DEBUG", "registEr:%s,use:%d,postEr:%s, eventId:%d", er, use, postEr, eventId);
+// }
+// void server_esp(void)
+// {
+//   ESP_LOGV("getFreeHeap", "%d", ESP.getFreeHeap(), ESP_OK);
+//   ESP_ERROR_CHECK(esp_task_wdt_init(20000, false)); // 初始化看门狗
+//   ESP_ERROR_CHECK(esp_task_wdt_add(NULL));
+//   ESP_ERROR_CHECK(esp_task_wdt_status(NULL));
+//   esp_task_wdt_add(xTaskGetIdleTaskHandleForCPU(0));
+//   esp_task_wdt_add(xTaskGetIdleTaskHandleForCPU(1));
+//   ESP_ERROR_CHECK(esp_event_loop_create_default());
+//   ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, esp_eg_on, (void *)__func__));
+//   ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, ESP_EVENT_ANY_ID, esp_eg_on, (void *)__func__));
+//   ESP_ERROR_CHECK(esp_event_handler_register(ETH_EVENT, ESP_EVENT_ANY_ID, esp_eg_on, (void *)__func__));
+//   ESP_ERROR_CHECK(esp_event_handler_register(SC_EVENT, ESP_EVENT_ANY_ID, esp_eg_on, (void *)__func__));
+// }
 //  void sendEr(structTypenamespace::notifyString_t *strObj)
 //  {
 //    if (strObj->sendTo_name == "server_serial")
@@ -406,7 +406,7 @@ void setup(void)
   // globalConfigLock = xSemaphoreCreateMutex();
   // fileOs_server();
   // xEventGroupWaitBits(eg_Handle, EGBIG_FILEOS, pdTRUE, pdTRUE, portMAX_DELAY);
-  // server_esp();
+  //server_esp();
   // config_set_fromFile();
   // xEventGroupWaitBits(eg_Handle, EGBIG_CONFIG, pdTRUE, pdTRUE, portMAX_DELAY);
   // ESP_LOGV("DEBUE", "%s", "---------------EGBIG_CONFIG  SUCCESS----------------");
@@ -425,10 +425,11 @@ void setup(void)
   // a7129namespace::taskParam_t *server_yblParam;
   // server_yblParam->sendTo_taskHandle = stdStringTaskHandle;
   // server_yblParam->config = config.server_ybl;
-  // xTaskCreate(a7129namespace::yblResTask, "ybResTask", 1024 * 4, (void *)server_yblParam, state.taskindex++, NULL);
-  xTaskCreate(a7129namespace::yblResTask, "ybResTask", 1024 * 7, NULL, 5, NULL);
+  xTaskCreate(a7129namespace::yblResTask, "ybResTask", 1024 * 4, (void *)&config.server_ybl, state.taskindex++, NULL);
+ // xTaskCreate(a7129namespace::yblResTask, "ybResTask", 1024 * 7, NULL, 5, NULL);
   // std::unordered_map 对象格式的json字符串
   vTaskStartScheduler();
+  // vTaskDelete(NULL);
 }
 void loop(void)
 {

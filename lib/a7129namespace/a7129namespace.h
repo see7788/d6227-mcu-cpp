@@ -3,9 +3,9 @@
 #include <Arduino.h>
 #include <tuple>
 #include <string>
-#include <structTypenamespace.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include <structTypenamespace.h>
 #define SYSTEMCLOCK_REG 0x00
 #define PLL1_REG 0x01
 #define PLL2_REG 0x02
@@ -76,16 +76,12 @@
 
 #define TIMEOUT 50  // 50ms
 #define t0hrel 1000 // 1ms
-Uint8 timer;
-Uint8 TimeoutFlag;
-Uint16 RxCnt;
-Uint32 Err_ByteCnt;
-Uint32 Err_BitCnt;
+
 Uint8 CmdBuf[11];
 Uint8 A7129_RX_BUFF[64];
-Uint8 end_data[7];
-bool interrupt_state = 0;
-bool send_state = 1;
+Uint16 end_data[7];
+bool interrupt_state = 0; // 中断标志
+bool send_state = 1;      //  发送标志
 
 #define SDIO 32
 #define SCS 14
@@ -99,8 +95,6 @@ namespace a7129namespace
     /*********************************************************************
     **  Global Variable Declaration
     *********************************************************************/
-    Uint8 timer;
-    Uint8 TimeoutFlag;
 
     Uint8 BitCount_Tab[16] = {0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4};
     Uint8 ID_Tab[8] = {0x54, 0x21, 0xA4, 0x23, 0xC7, 0x33, 0x45, 0xE7}; // ID code
@@ -137,7 +131,7 @@ namespace a7129namespace
             0x0302, // RTH register,
             0x400F, // AGC1 register,
             0x0AC0, // AGC2 register,
-            0x0045, // GIO register,   
+            0x0045, // GIO register,
             0xD281, // CKO register
             0x0004, // VCB register,
             0x0A21, // CHG1 register,  430MHz
@@ -174,22 +168,8 @@ namespace a7129namespace
     Uint16 A7129_ReadPageB(Uint8);
     void A7129_WriteFIFO(void);
     void RxPacket(void);
-    void Err_State(void);
-    void send_data(unsigned char Data[]);
-    unsigned char *resive_data(void);
     void handleInterrupt(void);
     ////////////////////////////////////////////////////////else说明
-
-    void Err_State(void)
-    {
-        // ERR display
-        // Error Proc...
-        //...
-        while (1)
-        {
-            delayMicroseconds(10);
-        }
-    }
 
     void StrobeCMD(Uint8 cmd)
     {
@@ -206,9 +186,12 @@ namespace a7129namespace
                 digitalWrite(SDIO, LOW);
 
             NOP();
+
             digitalWrite(SCK, HIGH);
             NOP();
+
             digitalWrite(SCK, LOW);
+
             cmd <<= 1;
         }
         digitalWrite(SCS, HIGH);
@@ -227,9 +210,12 @@ namespace a7129namespace
                 digitalWrite(SDIO, LOW);
 
             NOP();
+
             digitalWrite(SCK, HIGH);
             NOP();
+
             digitalWrite(SCK, LOW);
+
             src <<= 1;
         }
     }
@@ -248,9 +234,10 @@ namespace a7129namespace
                 tmp = (tmp << 1) | 0x01;
             else
                 tmp = tmp << 1;
-
+            NOP();
             digitalWrite(SCK, HIGH);
             NOP();
+
             digitalWrite(SCK, LOW);
         }
         return tmp;
@@ -269,10 +256,12 @@ namespace a7129namespace
                 digitalWrite(SDIO, HIGH);
             else
                 digitalWrite(SDIO, LOW);
-
+            NOP();
             digitalWrite(SCK, HIGH);
+
             NOP();
             digitalWrite(SCK, LOW);
+
             address <<= 1;
         }
         NOP();
@@ -284,10 +273,12 @@ namespace a7129namespace
                 digitalWrite(SDIO, HIGH);
             else
                 digitalWrite(SDIO, LOW);
-
+            NOP();
             digitalWrite(SCK, HIGH);
             NOP();
+
             digitalWrite(SCK, LOW);
+
             dataWord <<= 1;
         }
         digitalWrite(SCS, HIGH);
@@ -300,7 +291,7 @@ namespace a7129namespace
 
         pinMode(SDIO, OUTPUT); // SDIO写输出
         digitalWrite(SCS, LOW);
-        ;
+
         address |= CMD_Reg_R;
         for (i = 0; i < 8; i++)
         {
@@ -312,6 +303,7 @@ namespace a7129namespace
             NOP();
             digitalWrite(SCK, HIGH);
             NOP();
+
             digitalWrite(SCK, LOW);
 
             address <<= 1;
@@ -320,16 +312,16 @@ namespace a7129namespace
         digitalWrite(SDIO, HIGH); // SDIO拉高
         pinMode(SDIO, INPUT);     // SDIO写输入
         NOP();
-        NOP();
         for (i = 0; i < 16; i++)
         {
             if (digitalRead(SDIO))
                 tmp = (tmp << 1) | 0x01;
             else
                 tmp = tmp << 1;
-
+            NOP();
             digitalWrite(SCK, HIGH);
             NOP();
+
             digitalWrite(SCK, LOW);
         }
         digitalWrite(SCS, HIGH);
@@ -400,7 +392,7 @@ namespace a7129namespace
         tmp = A7129_ReadReg(SYSTEMCLOCK_REG);
         if (tmp != A7129Config[SYSTEMCLOCK_REG])
         {
-            Err_State();
+            //  ESP_LOGE("DEBUE", "%s", "");
         }
     }
 
@@ -428,7 +420,7 @@ namespace a7129namespace
 
         if ((d1 != ID_Tab[0]) || (d2 != ID_Tab[1]) || (d3 != ID_Tab[2]) || (d4 != ID_Tab[3]))
         {
-            Err_State();
+            ESP_LOGE("DEBUE", "%s", "");
         }
     }
 
@@ -458,7 +450,7 @@ namespace a7129namespace
         fbcf = (tmp >> 4) & 0x01;
         if (fbcf)
         {
-            Err_State();
+            ESP_LOGE("DEBUE", "%s", "");
         }
 
         // for check(VCO Current)
@@ -469,7 +461,7 @@ namespace a7129namespace
         //    TEST_BUFF[4] = vccf;        //测试
         if (vccf)
         {
-            Err_State();
+            ESP_LOGE("DEBUE", "%s", "");
         }
         // RSSI Calibration procedure @STB state
         A7129_WriteReg(ADC_REG, 0x4C00); // set ADC average=64
@@ -501,7 +493,7 @@ namespace a7129namespace
         vbcf = (tmp >> 8) & 0x01;
         if (vbcf)
         {
-            Err_State();
+            ESP_LOGE("DEBUE", "%s", "");
         }
     }
 
@@ -535,19 +527,17 @@ namespace a7129namespace
 
     void InitRF(void)
     {
-        Uint8 i;
-        pinMode(SDIO, OUTPUT); // SDIO写输出
+
         // initial pin
         pinMode(SCS, OUTPUT);
         digitalWrite(SCS, HIGH);
 
         pinMode(SCK, OUTPUT);
         digitalWrite(SCK, HIGH);
-
+        // SDIO写输出
         pinMode(SDIO, OUTPUT);
         digitalWrite(SDIO, HIGH);
         pinMode(GIO1, INPUT_PULLUP);
-
 
         StrobeCMD(CMD_RF_RST); // reset A7129 chip
         A7129_Config();        // config A7129 chip
@@ -600,35 +590,33 @@ namespace a7129namespace
             CRC16_Update(Payload[i]); // Payload--> the data you send
     }
 
-    static int Data_Output(Uint8 *Payload, Uint8 *DataBuf) // 数据输出
+    static int Data_Output(Uint8 *Payload, Uint16 *DataBuf) // 数据输出
     {
-        CRC_test(Payload, 3);
-        // 深圳市易百珑科技有限公司
-        // if ((CRC16_High == Payload[3]) && (CRC16_Low == Payload[4]))
-        if (1)
-        {
-            CRC_test(Payload, 6);
-            // if (CRC16_Low == Payload[6])
-            if (1)
-            {
-                DataBuf[0] = Payload[0];
-                DataBuf[1] = Payload[1];
-                DataBuf[2] = Payload[5] & 0x0F;
-                DataBuf[3] = ((Payload[5] & 0x3F) >> 4) * 2;
-                DataBuf[4] = (Payload[5] >> 6) + 1; // type
-                DataBuf[5] = Payload[2];            // state
-                return (0);                         // 接收正确
-            }
+        // CRC_test(Payload, 3);
+        // // 深圳市易百珑科技有限公司
+        // // if ((CRC16_High == Payload[3]) && (CRC16_Low == Payload[4]))
+        // {
+        //     CRC_test(Payload, 6);
+        //     // if (CRC16_Low == Payload[6])
+        //     {
+        DataBuf[0] = Payload[0];
+        DataBuf[1] = Payload[1];
+        DataBuf[2] = Payload[2];
+        DataBuf[3] = Payload[3];
+        DataBuf[4] = Payload[4];
+        DataBuf[5] = Payload[5];
+        return (0); // 接收正确
+        //     }
 
-            else
-            {
-                return (1); // 接收错误
-            }
-        }
-        else
-        {
-            return (2); // 接收错误
-        }
+        //     else
+        //     {
+        //         return (1); // 接收错误
+        //     }
+        // }
+        // else
+        // {
+        //     return (2); // 接收错误
+        // }
     }
 
     /********/
@@ -640,41 +628,43 @@ namespace a7129namespace
         Uint8 type;
         Uint8 state;
     } idState_t;
-    // std::unordered_map<id_t, idState_t> dev;
-    int devMaxIndex = 0;
-
-    typedef id_t useIds_t[20];
-    useIds_t *useIds;
     idState_t dev[20];
-    // sendTo_name,id白名单
-    typedef std::tuple<std::string, useIds_t> config_t;
+    typedef id_t useIds_t[20];
+    useIds_t &useIds;
+    int devMaxIndex = 0;
+    // id白名单,sendTo_name
+    typedef std::tuple<useIds_t, std::string, structTypenamespace::callback> config_t;
     typedef struct
     {
-        config_t &config;
-        TaskHandle_t &sendTo_taskHandle;
+        config_t config;
     } taskParam_t;
-
     int getDevIndex(id_t id_vale)
     {
-        int index = -1;
-        for (int i = 0; i < sizeof(dev) / sizeof(dev[0]); i++)
+        int index = -1;//int更新，-1插入，-2跳过
+        if (useIds[0] != 0)
         {
-            if (dev[i].id == id_vale)
+            for (char i = 0; i < sizeof(useIds) / sizeof(useIds[0]); i++)
             {
-                index = i;
-                break;
-            }
-        }
-
-        if ((*useIds)[0] != 0)
-            for (char i = 0; i < sizeof((*useIds)) / sizeof((*useIds)[0]); i++)
-            {
-                if (id_vale == (*useIds)[i])
+                if (id_vale == useIds[i])
+                {
+                    index = i;
                     break;
+                }
                 else
                     index = -2;
             }
-
+        }
+        else
+        {
+            for (int i = 0; i < sizeof(dev) / sizeof(dev[0]); i++)
+            {
+                if (dev[i].id == id_vale)
+                {
+                    index = i;
+                    break;
+                }
+            }
+        }
         return index;
     }
 
@@ -685,136 +675,100 @@ namespace a7129namespace
             RxPacket();        // 接收数据,数据存放在A7129_RX_BUFF[],数组最多7个元素
             StrobeCMD(CMD_RX); // 设置为接收模式
             Data_Output(A7129_RX_BUFF, end_data);
-
-            id_t id_vale = end_data[1] << 8 + end_data[0];
-
+            id_t id_vale = end_data[0] << 24 | end_data[1] << 16 | end_data[3] << 8 | end_data[4];
             int nowIndex = getDevIndex(id_vale);
-
             if (nowIndex > -1)
             {
-                dev[nowIndex].state = end_data[5];
+                dev[nowIndex].state = end_data[2];
             }
             else if (nowIndex == -1)
             {
                 dev[devMaxIndex].id = id_vale;
-                dev[devMaxIndex].state = end_data[5];
-                dev[devMaxIndex].type = end_data[4];
+                dev[devMaxIndex].state = end_data[2];
+                dev[devMaxIndex].type = end_data[5];
                 devMaxIndex++;
             }
-
             interrupt_state = 1;
         }
     }
 
     void yblSend(idState_t idState)
     {
-        int fif = 0;
         // id1  id2  state  else  else type
         send_state = 0;
 
-        fif = idState.id << 8;
-        PN9_Tab[0] = fif >> 8;
-        PN9_Tab[1] = idState.id >> 8;
+        PN9_Tab[0] = idState.id >> 24;
+        PN9_Tab[1] = (idState.id >> 16) & 0xff;
         PN9_Tab[2] = idState.state;
-        PN9_Tab[3] = 0x0; //
-        PN9_Tab[4] = 0x0; //
+        PN9_Tab[3] = (idState.id >> 8) & 0xff; //
+        PN9_Tab[4] = idState.id & 0xff;        //
         PN9_Tab[5] = idState.type;
         InitRF();
         A7129_WriteFIFO(); // write data to TX FIFO
         StrobeCMD(CMD_TX);
         delayMicroseconds(10);
-        
-        while (digitalRead(GIO1));
-            // wait transmit completed
-        // StrobeCMD(CMD_RX);
-        // delayMicroseconds(10);
 
-        // timer = 0;
-        // TimeoutFlag = 0;
-        // while ((digitalRead(GIO1)==1) && (TimeoutFlag == 0))
-        // {
-        //     timer++;
-        //     if (timer >= TIMEOUT)
-        //     {
-        //         TimeoutFlag = 1;
-        //     }
+        // while (digitalRead(GIO1));
 
-        //     delay(1);
-        // } // wait receive completed
-
-        // if (TimeoutFlag)
-        // {
-        //     StrobeCMD(CMD_STBY);
-        // }
-        // else
-        // {
-        //     RxPacket();
-        //     vTaskDelay(50);
-        // }
-
-
-        vTaskDelay(100);
+        vTaskDelay(30);
 
         InitRF();
         delayMicroseconds(300);
         StrobeCMD(CMD_STBY);
         StrobeCMD(CMD_PLL);
         StrobeCMD(CMD_RX); // 设为接收模式
+        // for (char k = 0; k < 6; k++)
+        // {
+        //     Serial.print(PN9_Tab[k], HEX);
+        //     Serial.print("  ");
+        // }
 
+        // Serial.println("  ");
+        // Serial.print(end_data[i], HEX);
+        // Serial.println("  ");
 
         send_state = 1;
     }
 
     void yblResTask(void *ptr)
     {
-        // taskParam_t c = *(taskParam_t *)ptr;
-        useIds_t c;
-        idState_t test;
-        useIds = &c; // &std::get<1>(c.config);
+        config_t *c = (config_t *)ptr;
+        // useIds = std::get<0>(*c);
+        std::tie(useIds) = c->config;
+        send_state = 1;
 
         InitRF(); // init RF,最后一个字段0x8E,0x12,0x86
-        RxCnt = 0;
-        Err_ByteCnt = 0;
-        Err_BitCnt = 0;
-        send_state = 1;
         delayMicroseconds(300);
         StrobeCMD(CMD_STBY);
         StrobeCMD(CMD_PLL);
         StrobeCMD(CMD_RX); // 设为接收模式
         pinMode(GIO1, INPUT_PULLUP);
         attachInterrupt(GIO1, handleInterrupt, FALLING); // 创建中断
-
-        Serial.println("============1573===========");
-        test.id = 1;
-        test.state = 4;
-        test.type = 8;
-
         while (1)
         {
 
             if (interrupt_state == 1)
             {
-                for (char i = 0; i < 40; i++)
+                for (char i = 0; i < 6; i++)
                 {
-                    // Serial.print(dev[i].id);
-                    // Serial.print(" ");
-                    // Serial.print(dev[i].state);
-                    // Serial.print(" ");
-                    // Serial.print(dev[i].type);
-                    // Serial.println(" ");
-                    Serial.print(A7129_RX_BUFF[i], HEX);
-                    Serial.print("  ");
+                    Serial.print(dev[i].id);
+                    Serial.print(" ");
+                    Serial.print(dev[i].state);
+                    Serial.print(" ");
+                    Serial.print(dev[i].type);
+                    Serial.println(" ");
+                    // Serial.print(end_data[i], HEX);
+                    // Serial.print("  ");
                 }
                 interrupt_state = 0;
-                Serial.println("==================");
             }
-            // xTaskNotify(c->sendTo_taskHandle, (uint32_t)obj, eSetValueWithOverwrite);
-            vTaskDelay(1000);
+            //    xTaskNotify(c->sendTo_taskHandle, (uint32_t)obj, eSetValueWithOverwrite);
+            // 长线 发送；短线 接收
 
-            //yblSend(test);
+            yblSend(dev[0]);
+            vTaskDelay(1000);
         }
     }
 
 };
-
 #endif
