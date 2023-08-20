@@ -631,23 +631,24 @@ namespace a7129namespace
     idState_t dev[20];
     typedef id_t useIds_t[20];
     useIds_t &useIds;
-    int devMaxIndex = 0;
     // id白名单,sendTo_name
     typedef std::tuple<useIds_t, std::string, structTypenamespace::callback> config_t;
     typedef struct
     {
         config_t config;
     } taskParam_t;
-    int getDevIndex(id_t id_vale)
+
+    int devMaxIndex = 0;
+    void use_end_data(void)
     {
-        int index = -1;//int更新，-1插入，-2跳过
+        id_t id_vale = end_data[0] << 24 | end_data[1] << 16 | end_data[3] << 8 | end_data[4];
         if (useIds[0] != 0)
         {
             for (char i = 0; i < sizeof(useIds) / sizeof(useIds[0]); i++)
             {
                 if (id_vale == useIds[i])
                 {
-                    index = i;
+                    dev[i].state = end_data[2];
                     break;
                 }
                 else
@@ -660,12 +661,15 @@ namespace a7129namespace
             {
                 if (dev[i].id == id_vale)
                 {
-                    index = i;
+                    dev[i].state = end_data[2];
                     break;
                 }
             }
+            dev[devMaxIndex].id = id_vale;
+            dev[devMaxIndex].state = end_data[2];
+            dev[devMaxIndex].type = end_data[5];
+            devMaxIndex++;
         }
-        return index;
     }
 
     void handleInterrupt(void)
@@ -675,20 +679,7 @@ namespace a7129namespace
             RxPacket();        // 接收数据,数据存放在A7129_RX_BUFF[],数组最多7个元素
             StrobeCMD(CMD_RX); // 设置为接收模式
             Data_Output(A7129_RX_BUFF, end_data);
-            id_t id_vale = end_data[0] << 24 | end_data[1] << 16 | end_data[3] << 8 | end_data[4];
-            int nowIndex = getDevIndex(id_vale);
-            if (nowIndex > -1)
-            {
-                dev[nowIndex].state = end_data[2];
-            }
-            else if (nowIndex == -1)
-            {
-                dev[devMaxIndex].id = id_vale;
-                dev[devMaxIndex].state = end_data[2];
-                dev[devMaxIndex].type = end_data[5];
-                devMaxIndex++;
-            }
-            interrupt_state = 1;
+            use_end_data();
         }
     }
 
