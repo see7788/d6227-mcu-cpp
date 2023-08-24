@@ -1,5 +1,6 @@
-#include <string>
+#include <String>
 #include <tuple>
+#include <ESP.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <freertos/event_groups.h>
@@ -12,435 +13,348 @@
 #include <FS.h>
 #include <WiFi.h>
 #include <Arduino.h>
-// #include <SPIFFS.h>
-// #include <IPAddress.h>
-// #include <ArduinoJson.h>
-// #include <ESPAsyncWebServer.h>
-// #include <AsyncWebSocket.h>
-// #include <structTypenamespace.h>
-// #include <serialTasknamespace.h>
-// #include <dz003namespace.h>
-// #include <filenamespace.h>
-// #include <netnamespace.h>
+#include <IPAddress.h>
+#include <SPIFFS.h>
+#include <ArduinoJson.h>
+#include <structTypenamespace.h>
+#include <MySerial.h>
+#include <MyWebServer.h>
+#include <dz003namespace.h>
+#include <MyFs.h>
+#include <MyNet.h>
 #include <a7129namespace.h>
-// #define fileOs SPIFFS
-#define uartDef Serial
-#define EGBIG_FILEOS (1 << 0)
-#define EGBIG_CONFIG (2 << 0)
-#define EGBIG_NET (3 << 0)
-// AsyncWebServer *webServer;
-// AsyncWebSocket *wsServer;
-typedef struct
+#define EGBIG_SERVER_CONFIGFS (1 << 0)
+#define EGBIG_SERVER_NET (2 << 0)
+using namespace std;
+struct state_t
 {
-  String packageName;
-  String mcuId;
+  SemaphoreHandle_t configLock;
+  MyFs *server_configFs;
+  MyNet *server_net;
+  MySerial *server_serial;
+  MyWebServer *server_webserver;
+  dz003namespace::taskParam_t *server_dz003_taskParam;
+  a7129namespace::taskParam_t *server_ybl_taskParam;
   String locIp;
   int taskindex;
-} state_t;
-state_t state;
-typedef struct
+} state;
+struct config_t
 {
-  // netnamespace::initParam_t server_net;
+  tuple<String, String, String, String> server_env;
+  tuple<String> client_html;
+  MySerial::config_t server_serial;
+  MyNet::config_t server_net;
+  MyWebServer::config_MyWebServer_t server_html;
+  dz003namespace::config_t server_dz003;
   a7129namespace::config_t server_ybl;
-  // dz003namespace::config_t server_dz003;
-  std::tuple<std::string> server_html;
-  std::tuple<std::string> client_html;
-} config_t;
-config_t config;
-EventGroupHandle_t eg_Handle = xEventGroupCreate();
-String GLOBALFILEPATH = "/config.json";
-// TaskHandle_t stdStringTaskHandle, jsonArrayTaskHandle, server_serialTaskHandle, server_dz003TaskHandle;
-// SemaphoreHandle_t globalConfigLock;
-//  String mcuId_get(void)
-//  {
-//    return String(ESP.getEfuseMac(), HEX);
-//  }
-//  void config_set(JsonObject &obj)
-//  {
-//    JsonArray arr;
-//    if (obj.containsKey("server_dz003"))
-//    {
-//      arr = obj["server_dz003"].as<JsonArray>();
-//      config.server_dz003 = std::make_tuple(
-//          arr[0].as<int>(),
-//          arr[1].as<int>(),
-//          arr[2].as<int>(),
-//          arr[3].as<int>(),
-//          arr[4].as<std::string>());
-//    }
-//  }
-//  jsonObject &config_get(void)
-//  {
-//  }
-//  void config_set_toFile(void)
-//  {
-//    File dataFile = fileOs.open(GLOBALFILEPATH, "w");
-//    DeserializationError error = serializeJson(config_get(), dataFile);
-//    dataFile.close();
-//    if (error)
-//    {
-//      ESP_LOGV("DEBUE", "%s", error.c_str());
-//    }
-//  }
-//  void config_set_fromFile(void)
-//  {
-//    if (!fileOs.exists(GLOBALFILEPATH))
-//    {
-//      ESP_LOGV("DEBUE", " !fileOs.exists(GLOBALFILEPATH)");
-//      return;
-//    }
-//    DynamicJsonDocument c(3000);
-//    File dataFile = fileOs.open(GLOBALFILEPATH);
-//    DeserializationError error = deserializeJson(c, dataFile);
-//    dataFile.close();
-//    if (error)
-//    {
-//      ESP_LOGV("DEBUE", "Error deserializing JSON:%s", error.c_str());
-//    }
-//    else
-//    {
-//      JsonObject json = c.to<JsonObject>();
-//      config_set(json);
-//      xEventGroupSetBits(eg_Handle, EGBIG_CONFIG);
-//      // serializeJson(c, uartDef);
-//      //   serializeJsonPretty(globalConfig, uartDef);
-//    }
-//  }
-// void esp_eg_on(void *registEr, esp_event_base_t postEr, int32_t eventId, void *eventData)
-// {
-//   // EventBits_t bits = xEventGroupWaitBits(eg_Handle, EGBIG_NET | EGBIG_NET | dz003_bit, pdFALSE, pdTRUE, portMAX_DELAY);
-//   // xEventGroupClearBits(eg_Handle, EGBIG_NET | BIT_2);
-//   char *er = (char *)registEr;
-//   int use = 0;
-//   if (postEr == IP_EVENT && eventId == 4)
-//   {
-//     // ESP_LOGV("DEBUG", "ETH.localIP:%s", ETH.localIP().toString().c_str());
-//     // state.locIp = String(ETH.localIP());
-//     xEventGroupSetBits(eg_Handle, EGBIG_NET);
-//     use = 1;
-//   }
-//   else if (postEr == IP_EVENT && eventId == 0)
-//   {
-//     ESP_LOGV("DEBUG", "WiFi.localIP:%s", WiFi.localIP().toString().c_str());
-//     // state.locIp = String(WiFi.localIP());
-//     xEventGroupSetBits(eg_Handle, EGBIG_NET);
-//     use = 1;
-//   }
-//   // char *data = eventData ? ((char *)eventData) : ((char *)"");
-//   // ESP_LOGV("DEBUG", "registEr:%s,use:%d,postEr:%s, eventId:%d,eventData:%s", er, use, postEr, eventId, (char *)eventData);
-//   ESP_LOGV("DEBUG", "registEr:%s,use:%d,postEr:%s, eventId:%d", er, use, postEr, eventId);
-// }
-// void server_esp(void)
-// {
-//   ESP_LOGV("getFreeHeap", "%d", ESP.getFreeHeap(), ESP_OK);
-//   ESP_ERROR_CHECK(esp_task_wdt_init(20000, false)); // 初始化看门狗
-//   ESP_ERROR_CHECK(esp_task_wdt_add(NULL));
-//   ESP_ERROR_CHECK(esp_task_wdt_status(NULL));
-//   esp_task_wdt_add(xTaskGetIdleTaskHandleForCPU(0));
-//   esp_task_wdt_add(xTaskGetIdleTaskHandleForCPU(1));
-//   ESP_ERROR_CHECK(esp_event_loop_create_default());
-//   ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, esp_eg_on, (void *)__func__));
-//   ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, ESP_EVENT_ANY_ID, esp_eg_on, (void *)__func__));
-//   ESP_ERROR_CHECK(esp_event_handler_register(ETH_EVENT, ESP_EVENT_ANY_ID, esp_eg_on, (void *)__func__));
-//   ESP_ERROR_CHECK(esp_event_handler_register(SC_EVENT, ESP_EVENT_ANY_ID, esp_eg_on, (void *)__func__));
-// }
-//  void sendEr(structTypenamespace::notifyString_t *strObj)
-//  {
-//    if (strObj->sendTo_name == "server_serial")
-//    {
-//      serialTasknamespace::send(strObj->msg);
-//    }
-//    else
-//    {
-//      strObj->msg = "[\"sendTo_name undefind\"]";
-//      serialTasknamespace::send(strObj->msg);
-//    }
-//  }
-//  void jsonArrayParse(structTypenamespace::notifyJsonArray_t &arrObj)
-//  {
-//    if (xSemaphoreTake(globalConfigLock, portMAX_DELAY) == pdTRUE)
-//    {
-//      JsonArray doc = arrObj.msg;
-//      String api = doc[0].as<String>();
-//      String msg;
-//      if (api == "config_set")
-//      {
-//        for (auto kv : doc[1].as<JsonObject>())
-//        {
-//          if (globalConfig.containsKey(kv.key()))
-//          {
-//            globalConfig[kv.key()].set(kv.value());
-//          };
-//        };
-//      }
-//      else if (api == "config_get")
-//      {
-//        doc[0].set("config_set");
-//        doc[1].set(globalConfig);
-//        serializeJson(doc, msg);
-//      }
-//      else if (api == "config_toFile")
-//      {
-//        File file = fileOs.open(GLOBALFILEPATH, "w");
-//        serializeJson(globalConfig, file);
-//        file.close();
-//        msg = "[\"config_toFile\"]";
-//      }
-//      else if (api == "config_fromFile")
-//      {
-//        globalConfig_fromFile();
-//        doc[0].set("config_set");
-//        doc[1].set(globalConfig);
-//        serializeJson(doc, msg);
-//      }
-//      else if (api == "restart")
-//      {
-//        msg = "[\"api restart\"]";
-//        ESP.restart(); // 重启复位esp32
-//      }
-//      else if (api == "state_get")
-//      {
-//        uint32_t ulBits = xEventGroupGetBits(eg_Handle); // 获取 Event Group 变量当前值
-//        doc[0].set("state_set");
-//        DynamicJsonDocument info(100);
-//        JsonObject egBit = info.createNestedObject("egBit");
-//        for (int i = sizeof(ulBits) * 8 - 1; i >= 0; i--)
-//        { // 循环输出每个二进制位
-//          uint32_t mask = 1 << i;
-//          if (ulBits & mask)
-//          {
-//            egBit[String(i)] = true;
-//          }
-//          else
-//          {
-//            egBit[String(i)] = false;
-//          }
-//        }
-//        info["locIp"] = state.locIp;
-//        doc[1].set(info);
-//        serializeJson(doc, msg);
-//      }
-//      else if (api == "dz003State")
-//      {
-//        msg = dz003Tasknamespace::state();
-//      }
-//      else if (api == "dz003.fa_set")
-//      {
-//        dz003Tasknamespace::fa_set(doc[1].as<bool>());
-//        msg = dz003Tasknamespace::state();
-//      }
-//      else if (api == "dz003.frequency_set")
-//      {
-//        dz003Tasknamespace::frequency_set(doc[1].as<bool>());
-//        msg = dz003Tasknamespace::state();
-//      }
-//      else if (api == "dz003.laba_set")
-//      {
-//        dz003Tasknamespace::laba_set(doc[1].as<bool>());
-//        msg = dz003Tasknamespace::state();
-//      }
-//      else if (api == "dz003.deng_set")
-//      {
-//        dz003Tasknamespace::deng_set(doc[1].as<bool>());
-//        msg = dz003Tasknamespace::state();
-//      }
-//      else
-//      {
-//        msg = "[\"mcu pass\",\"" + api + "\"]";
-//      }
-//      structTypenamespace::notifyString_t strObj = {arrObj->sendTo_name, msg};
-//      sendEr(&strObj);
-//      xSemaphoreGive(globalConfigLock);
-//    }
-//  }
-//  void stdStringParse(structTypenamespace::notifyString_t &strObj)
-//  {
-//    DynamicJsonDocument doc(3000);
-//    DeserializationError error = deserializeJson(doc, strObj.msg);
-//    if (error)
-//    {
-//      strObj.msg = "[\"json pase error\",\"" + String(error.c_str()) + "\"]";
-//      sendEr(strObj);
-//    }
-//    else
-//    {
-//      JsonArray arr = doc.as<JsonArray>();
-//      structTypenamespace::notifyJsonArray_t arrObj = {strObj.sendTo_name, arr};
-//      jsonArrayParse(arrObj);
-//    }
-//  }
-//  void jsonArrayTask(void *nullparam)
-//  {
-//    uint32_t ptr;
-//    structTypenamespace::notifyJsonArray_t *arrObj; //= new structTypenamespace::notifyJsonArray_t();
-//    for (;;)
-//    {
-//      if (xTaskNotifyWait(pdFALSE, ULONG_MAX, (uint32_t *)&ptr, portMAX_DELAY) == pdPASS)
-//      {
-//        arrObj = (structTypenamespace::notifyJsonArray_t *)ptr;
-//        jsonArrayParse(arrObj);
-//        ulTaskNotifyValueClear(xTaskGetCurrentTaskHandle(), ptr); // 清除通知值
-//      }
-//    }
-//  }
-//  void stdStringTask(void *nullparam)
-//  {
-//    uint32_t ptr;
-//    structTypenamespace::notifyString_t *strObj; //= new structTypenamespace::notifyString_t();
-//    for (;;)
-//    {
-//      if (xTaskNotifyWait(pdFALSE, ULONG_MAX, (uint32_t *)&ptr, portMAX_DELAY) == pdPASS)
-//      {
-//        strObj = (structTypenamespace::notifyString_t *)ptr;
-//        stdStringParse(strObj);
-//        ESP_LOGV("DEBUE", "%s", strObj->sendTo_name.c_str());
-//        ulTaskNotifyValueClear(xTaskGetCurrentTaskHandle(), ptr); // 清除通知值
-//      }
-//    }
-//  }
-//  bool fileOs_server()
-//  {
-//    if (fileOs.begin(true))
-//    {
-//      xEventGroupSetBits(eg_Handle, EGBIG_CONFIG);
-//    }
-//  }
-//  void server_serial(void)
-//  {
-//    Serial.onReceive([]()
-//                     {
-//       structTypenamespace::notifyString_t strObj = {
-//        globalConfig["server"]["serial"][0].as<const char *>(),
-//        Serial.readStringUntil('\n')
-//        };
-//    stdStringParse(&strObj); });
-//  }
-//  void server_ws(void)
-//  {
-//    wsServer->onEvent([=](AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len)
-//                      {
-//        String wsOn_db = "";
-//        if (type == WS_EVT_CONNECT)
-//        {
-//          wsServer->printfAll("[\"Hello Client :\", %u]", client->id());
-//        }
-//        else if (type == WS_EVT_DATA)
-//        {
-//          AwsFrameInfo *info = (AwsFrameInfo *)arg;
-//          if (info->final && info->index == 0 && info->len == len)
-//          {
-//            if (info->opcode == WS_TEXT)
-//            {
-//              for (size_t i = 0; i < info->len; i++)
-//              {
-//                wsOn_db += (char)data[i];
-//              }
-//            }
-//            else
-//            {
-//              char buff[3];
-//              for (size_t i = 0; i < info->len; i++)
-//              {
-//                sprintf(buff, "%02x ", (uint8_t)data[i]);
-//                wsOn_db += buff;
-//              }
-//            }
-//          }
-//          else
-//          {
-//            if (info->opcode == WS_TEXT)
-//            {
-//              for (size_t i = 0; i < len; i++)
-//              {
-//                wsOn_db += (char)data[i];
-//              }
-//            }
-//            else
-//            {
-//              char buff[3];
-//              for (size_t i = 0; i < len; i++)
-//              {
-//                sprintf(buff, "%02x ", (uint8_t)data[i]);
-//                wsOn_db += buff;
-//              }
-//            }
-//          }
-
-//       } });
-// }
-// void server_ota(void)
-// {
-// }
-// void server_html(void)
-// {
-//   //"http://39.97.216.195:8083/index.html?wsIp="
-//   webServer->on("*", HTTP_GET, [](AsyncWebServerRequest *request)
-//                 {
-//       AsyncResponseStream *response = request->beginResponseStream("text/html");
-//       response->print("<!DOCTYPE html><html><head><title>Captive Portal</title></head><body>");
-//       response->printf("<p>request->host:%s%s</p>", request->host().c_str(), request->url().c_str());
-//       response->printf("<p>WiFi.softAPIP:%s</p>", WiFi.softAPIP().toString().c_str());
-//       response->printf("<p>WiFi.localIP:%s</p>", WiFi.localIP().toString().c_str());
-//       response->printf("<button onclick=\"window.location.href='http://%s/index.html?wsIp='\">net</button>",state.locIp.c_str(),WiFi.localIP().toString().c_str());
-//       response->printf("<button onclick=\"window.location.href='http://%s/index.html?wsIp='\">互联网ws通信</button>",state.locIp.c_str(),WiFi.localIP().toString().c_str());
-//       response->printf("<button onclick=\"window.location.href='http://%s/index.html?wsIp='\">互联网serial通信</button>",state.locIp.c_str(),WiFi.localIP().toString().c_str());
-//       response->print("</body></html>");
-//       request->send(response); });
-// }
-// void server_static(void)
-// {
-//   webServer->serveStatic("/", fileOs, "/").setCacheControl("max-age=600");
-//   webServer->addHandler(wsServer);
-//   DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "*");
-// }
-// void server_http(void)
-// {
-// }
-// void server_events(void)
-// {
-// }
-
+} config;
+EventGroupHandle_t eg_Handle;
+TaskHandle_t stdStringTaskHandle, jsonArrayTaskHandle, server_serialTaskHandle, server_dz003TaskHandle;
+void esp_eg_on(void *registEr, esp_event_base_t postEr, int32_t eventId, void *eventData)
+{
+  // EventBits_t bits = xEventGroupWaitBits(eg_Handle, EGBIG_SERVER_NET | EGBIG_SERVER_NET , pdFALSE, pdTRUE, portMAX_DELAY);
+  // xEventGroupClearBits(eg_Handle, EGBIG_SERVER_NET | BIT_2);
+  char *er = (char *)registEr;
+  int use = 0;
+  if (postEr == IP_EVENT && eventId == 4)
+  {
+    state.locIp = ETH.localIP().toString().c_str();
+    xEventGroupSetBits(eg_Handle, EGBIG_SERVER_NET);
+    use = 1;
+  }
+  else if (postEr == IP_EVENT && eventId == 0)
+  {
+    state.locIp = WiFi.localIP().toString().c_str();
+    xEventGroupSetBits(eg_Handle, EGBIG_SERVER_NET);
+    use = 1;
+  }
+  // char *data = eventData ? ((char *)eventData) : ((char *)"");
+  // ESP_LOGV("DEBUG", "registEr:%s,use:%d,postEr:%s, eventId:%d,eventData:%s", er, use, postEr, eventId, (char *)eventData);
+  ESP_LOGV("DEBUG", "registEr:%s,use:%d,postEr:%s, eventId:%d", er, use, postEr, eventId);
+}
+void config_set(JsonObject &obj)
+{
+  // JsonArray arr;
+  // if (obj.containsKey("server_configFs"))
+  // {
+  //   arr = obj["server_configFs"].as<JsonArray>();
+  //   config.server_configFs = make_tuple(
+  //       arr[0].as<String>());
+  // }
+  // if (obj.containsKey("server_serial"))
+  // {
+  //   arr = obj["server_serial"].as<JsonArray>();
+  //   config.server_serial = make_tuple(
+  //       arr[0].as<int>(),
+  //       arr[1].as<int8_t>(),
+  //       arr[2].as<int8_t>(),
+  //       arr[4].as<String>());
+  // }
+  // if (obj.containsKey("server_net"))
+  // {
+  //   arr = obj["server_net"].as<JsonArray>();
+  //   // config.server_net = make_tuple(
+  //   //     arr[0].as<int>(),
+  //   //     arr[1].as<int8_t>(),
+  //   //     arr[2].as<int8_t>(),
+  //   //     arr[4].as<String>());
+  // }
+  // if (obj.containsKey("server_dz003"))
+  // {
+  //   arr = obj["server_dz003"].as<JsonArray>();
+  //   config.server_dz003 = make_tuple(
+  //       arr[0].as<int>(),
+  //       arr[1].as<int>(),
+  //       arr[2].as<int>(),
+  //       arr[3].as<int>(),
+  //       arr[4].as<String>());
+  // }
+}
+void config_get(JsonObject &obj)
+{
+  // JsonObject env = obj.createNestedObject("env");
+  // JsonArray server_configFs = obj.createNestedArray("server_configFs");
+}
+void sendEr(structTypenamespace::notifyString_t &strObj)
+{
+  if (strObj.sendTo_name == "server_serial")
+  {
+    state.server_serial->println(strObj.msg.c_str());
+  }
+  else
+  {
+    strObj.msg = "[\"sendTo_name undefind\"]";
+    state.server_serial->println(strObj.msg.c_str());
+  }
+}
+void jsonArrayParse(structTypenamespace::notifyJsonArray_t &arrObj)
+{
+  if (xSemaphoreTake(state.configLock, portMAX_DELAY) == pdTRUE)
+  {
+    JsonArray arr = arrObj.msg;
+    String api = arr[0].as<String>();
+    if (api == "config_set")
+    {
+      JsonObject obj = arr[1].as<JsonObject>();
+      config_set(obj);
+    }
+    else if (api == "config_get")
+    {
+      arr[0].set("config_set");
+      JsonObject obj = arr.createNestedObject();
+      config_get(obj);
+    }
+    else if (api == "config_toFile")
+    {
+      JsonObject obj = arr.createNestedObject();
+      config_get(obj);
+      int success = state.server_configFs->writeFile(obj);
+      if (success < 1)
+      {
+        arr[0].set("config_toFile error");
+      }
+    }
+    else if (api == "config_fromFile")
+    {
+      DynamicJsonDocument doc(3000);
+      DeserializationError error = state.server_configFs->readFile(doc);
+      if (error)
+      {
+        arr[0].set("config_fromFile error");
+        arr[1].set(error.c_str());
+      }
+      else
+      {
+        JsonObject c = doc.as<JsonObject>();
+        JsonObject obj = arr.createNestedObject();
+        obj.set(c);
+        config_set(obj);
+        arr[0].set("config_set");
+      }
+    }
+    else if (api == "restart")
+    {
+      ESP.restart();
+    }
+    else if (api == "state_get")
+    {
+      uint32_t ulBits = xEventGroupGetBits(eg_Handle); // 获取 Event Group 变量当前值
+      arr.clear();
+      arr[0].set("state_set");
+      JsonObject obj = arr.createNestedObject();
+      JsonObject egBit = obj.createNestedObject("egBit");
+      for (int i = sizeof(ulBits) * 8 - 1; i >= 0; i--)
+      { // 循环输出每个二进制位
+        uint32_t mask = 1 << i;
+        if (ulBits & mask)
+        {
+          egBit[String(i)] = true;
+        }
+        else
+        {
+          egBit[String(i)] = false;
+        }
+      }
+      obj["locIp"] = state.locIp;
+    }
+    else
+    {
+      auto getdz003State = [&arr]()
+      {
+        arr[0].set("dz003State");
+        JsonObject obj = arr[1].as<JsonObject>();
+        dz003namespace::state(obj);
+      };
+      if (api == "dz003.state")
+      {
+        getdz003State();
+      }
+      else if (api == "dz003.fa_set")
+      {
+        dz003namespace::fa_set(arr[1].as<bool>());
+        getdz003State();
+      }
+      else if (api == "dz003.frequency_set")
+      {
+        dz003namespace::frequency_set(arr[1].as<bool>());
+        getdz003State();
+      }
+      else if (api == "dz003.laba_set")
+      {
+        dz003namespace::laba_set(arr[1].as<bool>());
+        getdz003State();
+      }
+      else if (api == "dz003.deng_set")
+      {
+        dz003namespace::deng_set(arr[1].as<bool>());
+        getdz003State();
+      }
+      else
+      {
+        arr[0].set("mcu pass");
+        arr[1].set(api);
+      }
+    }
+    String msg;
+    serializeJson(arr, msg);
+    structTypenamespace::notifyString_t strObj = {arrObj.sendTo_name, msg};
+    sendEr(strObj);
+    xSemaphoreGive(state.configLock);
+  }
+}
+void stdStringParse(structTypenamespace::notifyString_t &strObj)
+{
+  DynamicJsonDocument doc(3000);
+  DeserializationError error = deserializeJson(doc, strObj.msg);
+  if (error)
+  {
+    strObj.msg = "[\"json pase error\",\"" + String(error.c_str()) + "\"]";
+    sendEr(strObj);
+  }
+  else
+  {
+    JsonArray arr = doc.as<JsonArray>();
+    structTypenamespace::notifyJsonArray_t arrObj = {strObj.sendTo_name, arr};
+    jsonArrayParse(arrObj);
+  }
+}
+void jsonArrayTask(void *nullparam)
+{
+  uint32_t ptr;
+  for (;;)
+  {
+    if (xTaskNotifyWait(pdFALSE, ULONG_MAX, (uint32_t *)&ptr, portMAX_DELAY) == pdPASS)
+    {
+      structTypenamespace::notifyJsonArray_t arrObj = *(structTypenamespace::notifyJsonArray_t *)ptr;
+      jsonArrayParse(arrObj);
+      // ulTaskNotifyValueClear(xTaskGetCurrentTaskHandle(), ptr); // 清除通知值
+    }
+  }
+}
+void stdStringTask(void *nullparam)
+{
+  uint32_t ptr;
+  for (;;)
+  {
+    if (xTaskNotifyWait(pdFALSE, ULONG_MAX, (uint32_t *)&ptr, portMAX_DELAY) == pdPASS)
+    {
+      structTypenamespace::notifyString_t strObj = *(structTypenamespace::notifyString_t *)ptr;
+      stdStringParse(strObj);
+      // ulTaskNotifyValueClear(xTaskGetCurrentTaskHandle(), ptr); // 清除通知值
+    }
+  }
+}
+void server_esp(void)
+{
+  ESP_LOGV("getFreeHeap", "%zu", ESP.getFreeHeap());
+  ESP_ERROR_CHECK(esp_task_wdt_init(20000, false)); // 初始化看门狗
+  ESP_ERROR_CHECK(esp_task_wdt_add(NULL));
+  ESP_ERROR_CHECK(esp_task_wdt_status(NULL));
+  esp_task_wdt_add(xTaskGetIdleTaskHandleForCPU(0));
+  esp_task_wdt_add(xTaskGetIdleTaskHandleForCPU(1));
+  ESP_ERROR_CHECK(esp_event_loop_create_default());
+  ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, esp_eg_on, (void *)__func__));
+  ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, ESP_EVENT_ANY_ID, esp_eg_on, (void *)__func__));
+  ESP_ERROR_CHECK(esp_event_handler_register(ETH_EVENT, ESP_EVENT_ANY_ID, esp_eg_on, (void *)__func__));
+  ESP_ERROR_CHECK(esp_event_handler_register(SC_EVENT, ESP_EVENT_ANY_ID, esp_eg_on, (void *)__func__));
+}
+void server_serial_callback(void)
+{
+  String info = state.server_serial->readStringUntil('\n');
+  String str = String(info.c_str());
+  structTypenamespace::notifyString_t strObj = {get<0>(config.server_serial), str};
+  stdStringParse(strObj);
+}
 void setup(void)
 {
-  uartDef.begin(115200);
-  // globalConfigLock = xSemaphoreCreateMutex();
-  // fileOs_server();
-  // xEventGroupWaitBits(eg_Handle, EGBIG_FILEOS, pdTRUE, pdTRUE, portMAX_DELAY);
-  //server_esp();
-  // config_set_fromFile();
-  // xEventGroupWaitBits(eg_Handle, EGBIG_CONFIG, pdTRUE, pdTRUE, portMAX_DELAY);
-  // ESP_LOGV("DEBUE", "%s", "---------------EGBIG_CONFIG  SUCCESS----------------");
+  Serial.begin(115200);
+  state.configLock = xSemaphoreCreateMutex();
+  eg_Handle = xEventGroupCreate();
+  server_esp();
+  state.server_configFs = new MyFs("./config.json");
+  if (!state.server_configFs->file_bool)
+  {
+    config.server_serial = make_tuple(
+        "server_serial",
+        115200,
+        3,
+        1);
+
+    config.server_env = make_tuple(
+        String(ESP.getEfuseMac(), HEX),
+        "server_serial",
+        "",
+        "");
+  }
+  // xEventGroupSetBits(eg_Handle, EGBIG_SERVER_CONFIGFS);
+  // xEventGroupWaitBits(eg_Handle, EGBIG_SERVER_CONFIGFS, pdTRUE, pdTRUE, portMAX_DELAY);
+
+  // state.server_net = new MyNet(config.server_net);
+  // xEventGroupWaitBits(eg_Handle, EGBIG_SERVER_NET, pdTRUE, pdTRUE, portMAX_DELAY);
+
   // xTaskCreate(stdStringTask, "stdStringTask", 1024 * 10, NULL, state.taskindex++, &stdStringTaskHandle);
   // xTaskCreate(jsonArrayTask, "jsonArrayTask", 1024 * 10, NULL, state.taskindex++, &jsonArrayTaskHandle);
-  // server_serial();
-  // netnamespace::server_net(config.server_net);
-  // xEventGroupWaitBits(eg_Handle, EGBIG_NET, pdTRUE, pdTRUE, portMAX_DELAY);
-  // ESP_LOGV("DEBUE", "%s", "---------------EGBIG_NET SUCCESS------------------\n");
 
-  // dz003namespace::taskParam_t *server_dz003Param;
-  // server_dz003Param->sendTo_taskHandle = stdStringTaskHandle;
-  // server_dz003Param->config = config.server_dz003;
-  // xTaskCreate(dz003namespace::resTask, "server_dz003_Task", 1024 * 6, (void *)server_dz003Param, state.taskindex++, &server_dz003TaskHandle);
+  // state.server_serial = new MySerial(config.server_serial);
+  // state.server_serial->onReceive(server_serial_callback);
 
-  // a7129namespace::taskParam_t *server_yblParam;
-  // server_yblParam->sendTo_taskHandle = stdStringTaskHandle;
-  // server_yblParam->config = config.server_ybl;
-  xTaskCreate(a7129namespace::yblResTask, "ybResTask", 1024 * 4, (void *)&config.server_ybl, state.taskindex++, NULL);
- // xTaskCreate(a7129namespace::yblResTask, "ybResTask", 1024 * 7, NULL, 5, NULL);
-  // std::unordered_map 对象格式的json字符串
-  vTaskStartScheduler();
-  // vTaskDelete(NULL);
+  // state.server_dz003_taskParam->sendTo_taskHandle = stdStringTaskHandle;
+  // // state.server_dz003_taskParam->config = config.server_dz003;
+  // xTaskCreate(dz003namespace::resTask, "server_dz003_Task", 1024 * 6, (void *)state.server_dz003_taskParam, state.taskindex++, &server_dz003TaskHandle);
+
+  // state.server_ybl_taskParam->sendTo_taskHandle = stdStringTaskHandle;
+  // // state.server_ybl_taskParam->config = config.server_ybl;
+  // xTaskCreate(a7129namespace::yblResTask, "ybResTask", 1024 * 4, (void *)state.server_ybl_taskParam, state.taskindex++, NULL);
+  // // unordered_map 对象格式的json字符串
+
+  // vTaskStartScheduler();
+  //  vTaskDelete(NULL);
 }
 void loop(void)
 {
   // wsServer->cleanupClients(3);
-  vTaskDelay(10000);
+  // ESP_LOGV("getFreeHeap", "%zu", ESP.getFreeHeap());
+  // String s = String(ESP.getEfuseMac(), HEX);
+  Serial.println(std::get<0>(config.server_env));
+  vTaskDelay(1000);
 }
-
-// 等待锁
-//  if (xSemaphoreTake(globalConfigLock, portMAX_DELAY) == pdTRUE)
-//  {
-//    // 对共享数据进行操作
-//    // 释放数据锁
-//    xSemaphoreGive(globalConfigLock);
-//  }

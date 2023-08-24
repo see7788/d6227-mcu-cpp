@@ -630,48 +630,16 @@ namespace a7129namespace
     } idState_t;
     idState_t dev[20];
     typedef id_t useIds_t[20];
-    useIds_t &useIds;
+    useIds_t *useIds;
     // id白名单,sendTo_name
-    typedef std::tuple<useIds_t, std::string, structTypenamespace::callback> config_t;
+    typedef std::tuple<useIds_t, String> config_t;
     typedef struct
     {
         config_t config;
+        TaskHandle_t sendTo_taskHandle;
     } taskParam_t;
 
     int devMaxIndex = 0;
-    void yblUseData(void)
-    {
-        id_t id_vale = end_data[0] << 24 | end_data[1] << 16 | end_data[3] << 8 | end_data[4];
-        if (useIds[0] != 0)
-        {
-            for (char i = 0; i < sizeof(useIds) / sizeof(useIds[0]); i++)
-            {
-                if (id_vale == useIds[i])
-                {
-                    dev[i].state = end_data[2];
-                    break;
-                }
-                else
-                    index = -2;
-            }
-        }
-        else
-        {
-            for (int i = 0; i < sizeof(dev) / sizeof(dev[0]); i++)
-            {
-                if (dev[i].id == id_vale)
-                {
-                    dev[i].state = end_data[2];
-                    break;
-                }
-            }
-            dev[devMaxIndex].id = id_vale;
-            dev[devMaxIndex].state = end_data[2];
-            dev[devMaxIndex].type = end_data[5];
-            devMaxIndex++;
-        }
-    }
-
     void yblInterrupt(void)
     {
         if (send_state == 1)
@@ -679,7 +647,37 @@ namespace a7129namespace
             RxPacket();        // 接收数据,数据存放在A7129_RX_BUFF[],数组最多7个元素
             StrobeCMD(CMD_RX); // 设置为接收模式
             Data_Output(A7129_RX_BUFF, end_data);
-            yblUseData();
+            // useIds_t ids = *useIds;
+            id_t id_vale = end_data[0] << 24 | end_data[1] << 16 | end_data[3] << 8 | end_data[4];
+            if ((*useIds)[0] != 0)
+            {
+                for (char i = 0; i < sizeof((*useIds)) / sizeof(((*useIds))[0]); i++)
+                {
+                    if (id_vale == (*useIds)[i])
+                    {
+                        interrupt_state = 1;
+                        dev[i].state = end_data[2];
+                        return;
+                    }
+                }
+            }
+            else
+            {
+                for (int i = 0; i < sizeof(dev) / sizeof(dev[0]); i++)
+                {
+                    if (dev[i].id == id_vale)
+                    {
+                        interrupt_state = 1;
+                        dev[i].state = end_data[2];
+                        return;
+                    }
+                }
+                interrupt_state = 1;
+                dev[devMaxIndex].id = id_vale;
+                dev[devMaxIndex].state = end_data[2];
+                dev[devMaxIndex].type = end_data[5];
+                devMaxIndex++;
+            }
         }
     }
 
@@ -708,24 +706,25 @@ namespace a7129namespace
         StrobeCMD(CMD_STBY);
         StrobeCMD(CMD_PLL);
         StrobeCMD(CMD_RX); // 设为接收模式
-        // for (char k = 0; k < 6; k++)
-        // {
-        //     Serial.print(PN9_Tab[k], HEX);
-        //     Serial.print("  ");
-        // }
+        /*
+        for (char k = 0; k < 6; k++)
+        {
+            Serial.print(PN9_Tab[k], HEX);
+            Serial.print("  ");
+        }
 
-        // Serial.println("  ");
-        // Serial.print(end_data[i], HEX);
-        // Serial.println("  ");
-
+        Serial.println("  ");
+        Serial.print(end_data[i], HEX);
+        Serial.println("  ");
+        */
         send_state = 1;
     }
 
     void yblResTask(void *ptr)
     {
-        config_t *c = (config_t *)ptr;
-        // useIds = std::get<0>(*c);
-        std::tie(useIds) = c->config;
+        taskParam_t *c = (taskParam_t *)ptr;
+        useIds = &std::get<0>(c->config);
+        //  std::tie(useIds) = c->config;
         send_state = 1;
 
         InitRF(); // init RF,最后一个字段0x8E,0x12,0x86
@@ -734,7 +733,7 @@ namespace a7129namespace
         StrobeCMD(CMD_PLL);
         StrobeCMD(CMD_RX); // 设为接收模式
         pinMode(GIO1, INPUT_PULLUP);
-        yblInterrupt(GIO1, handleInterrupt, FALLING); // 创建中断
+        attachInterrupt(GIO1, yblInterrupt, FALLING); // 创建中断
         while (1)
         {
 
@@ -751,12 +750,12 @@ namespace a7129namespace
                     // Serial.print(end_data[i], HEX);
                     // Serial.print("  ");
                 }
+                //    xTaskNotify(c->sendTo_taskHandle, (uint32_t)obj, eSetValueWithOverwrite);
                 interrupt_state = 0;
             }
-            //    xTaskNotify(c->sendTo_taskHandle, (uint32_t)obj, eSetValueWithOverwrite);
             // 长线 发送；短线 接收
 
-            yblSend(dev[0]);
+            // yblSend(dev[0]);
             vTaskDelay(1000);
         }
     }
