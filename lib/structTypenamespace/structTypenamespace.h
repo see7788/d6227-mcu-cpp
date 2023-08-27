@@ -15,7 +15,7 @@ namespace structTypenamespace
         String sendTo_name;
         JsonArray msg;
     } notifyJsonArray_t;
-    typedef std::function<void(notifyString_t &)> stdStringParse_t;
-    typedef std::function<void(notifyJsonArray_t &)> jsonArrayParse_t;
+    // typedef std::function<void(notifyString_t &)> stdStringParse_t;
+    // typedef std::function<void(notifyJsonArray_t &)> jsonArrayParse_t;
 };
 #endif

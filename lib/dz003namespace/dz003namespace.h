@@ -6,7 +6,6 @@
 #include <ArduinoJson.h>
 #include <esp_log.h>
 #include <tuple>
-#include <string>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <structTypenamespace.h>
@@ -182,16 +181,16 @@ namespace dz003namespace
       dengread.add(digitalRead(deng.gpio[0]));
       dengread.add(digitalRead(deng.gpio[1]));
    }
-   typedef std::tuple<int, int, int, int,String> config_t; // v0v1abs_c，v0v1absLoop_c，loopNumber_c，set0tick_c，sendTo_name
+   typedef std::tuple<String, int, int, int, int> config_t; // v0v1abs_c，v0v1absLoop_c，loopNumber_c，set0tick_c，sendTo_name
    typedef struct
    {
-      config_t &config;
-      TaskHandle_t sendTo_taskHandle;
+      config_t *config;
+      // TaskHandle_t *sendTo_taskHandle;
    } taskParam_t;
    // std::numeric_limits<int>::max() - 20000;
    void resTask(void *ptr)
    {
-      taskParam_t c = *(taskParam_t *)ptr;
+      taskParam_t *c = (taskParam_t *)ptr;
       TickType_t ticksCount = xTaskGetTickCount();
       work_set(true);
       int &v0v1abs = frequency.log[0];
@@ -200,16 +199,16 @@ namespace dz003namespace
       v0v1absLoop = 0;
       int &loopNumber = frequency.log[2];
       loopNumber = 0;
-      structTypenamespace::notifyString_t *obj = new structTypenamespace::notifyString_t();
-      int &v0v1abs_c = std::get<0>(c.config);
-      int &v0v1absLoop_c = std::get<1>(c.config);
-      int &loopNumber_c = std::get<2>(c.config);
-      int &set0tick_c = std::get<3>(c.config);
-      obj->msg = "[\"dz003State\"]";
+      String sendTo, msg = "[\"dz003State\"]";
+      int v0v1abs_c, v0v1absLoop_c, loopNumber_c, set0tick_c;
+      std::tie(sendTo, v0v1abs_c, v0v1absLoop_c, loopNumber_c, set0tick_c) = *(c->config);
+      structTypenamespace::notifyString_t obj = {
+          .sendTo_name = sendTo,
+          .msg = msg};
+      ESP_LOGV("DEBUG","SUCCESS");
       for (;;)
       {
-         obj->sendTo_name = std::get<4>(c.config);
-         // ESP_LOGV("debug","%s",obj.msg.c_str());
+         //ESP_LOGV("DEBUG","===");
          loopNumber += 1;
          v0v1abs = abs(frequency.value[0] - frequency.value[1]);
          v0v1absLoop += v0v1abs;
@@ -217,7 +216,7 @@ namespace dz003namespace
          {
             work_set(false);
          }
-         xTaskNotify(c.sendTo_taskHandle, (uint32_t)obj, eSetValueWithOverwrite);
+         // xTaskNotify(c.sendTo_taskHandle, (uint32_t)obj, eSetValueWithOverwrite);
          frequency_valueset0();
          if (loopNumber > loopNumber_c)
          {

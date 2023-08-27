@@ -2,7 +2,12 @@
 #define a7129namespace_h
 #include <Arduino.h>
 #include <tuple>
-#include <string>
+#include <vector>
+std::vector<int> vec = {10, 20, 30, 40, 50};
+
+int target = 30;
+auto it = std::find(vec.begin(), vec.end(), target);
+#include <unordered_map>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <structTypenamespace.h>
@@ -80,8 +85,8 @@
 Uint8 CmdBuf[11];
 Uint8 A7129_RX_BUFF[64];
 Uint16 end_data[7];
-bool interrupt_state = 0; // 中断标志
-bool send_state = 1;      //  发送标志
+bool interrupt_state = 0; // 1有新接收
+bool send_state = 1;      //  0正在发送
 
 #define SDIO 32
 #define SCS 14
@@ -631,12 +636,12 @@ namespace a7129namespace
     idState_t dev[20];
     typedef id_t useIds_t[20];
     useIds_t *useIds;
-    // id白名单,sendTo_name
-    typedef std::tuple<useIds_t, String> config_t;
+    // sendTo_name,id白名单
+    typedef std::tuple<String, useIds_t> config_t;
     typedef struct
     {
-        config_t config;
-        TaskHandle_t sendTo_taskHandle;
+        config_t *config;
+        // TaskHandle_t *sendTo_taskHandle;
     } taskParam_t;
 
     int devMaxIndex = 0;
@@ -647,13 +652,15 @@ namespace a7129namespace
             RxPacket();        // 接收数据,数据存放在A7129_RX_BUFF[],数组最多7个元素
             StrobeCMD(CMD_RX); // 设置为接收模式
             Data_Output(A7129_RX_BUFF, end_data);
-            // useIds_t ids = *useIds;
+            useIds_t ids;
+            memcpy(ids, *useIds, sizeof(useIds_t));
             id_t id_vale = end_data[0] << 24 | end_data[1] << 16 | end_data[3] << 8 | end_data[4];
-            if ((*useIds)[0] != 0)
+            id_vale=id_vale|0xc400c18c;
+            if (ids[0] != 0)
             {
-                for (char i = 0; i < sizeof((*useIds)) / sizeof(((*useIds))[0]); i++)
+                for (char i = 0; i < sizeof(ids) / sizeof(ids[0]); i++)
                 {
-                    if (id_vale == (*useIds)[i])
+                    if (id_vale == ids[i])
                     {
                         interrupt_state = 1;
                         dev[i].state = end_data[2];
@@ -678,9 +685,44 @@ namespace a7129namespace
                 dev[devMaxIndex].type = end_data[5];
                 devMaxIndex++;
             }
+            // ESP_LOGV("DEBUG", "send_state=%d,interrupt_state=%d", send_state, interrupt_state);
         }
     }
-
+    // std::unordered_map<id_t, idState_t> dev;不知为何不能用
+    // void yblInterrupt2(void)
+    // {
+    //     if (send_state == 1)
+    //     {
+    //         RxPacket();        // 接收数据,数据存放在A7129_RX_BUFF[],数组最多7个元素
+    //         StrobeCMD(CMD_RX); // 设置为接收模式
+    //         id_t id_vale = A7129_RX_BUFF[0] << 24 | A7129_RX_BUFF[1] << 16 | A7129_RX_BUFF[3] << 8 | A7129_RX_BUFF[4];
+    //         // if ((*useIds)[0] != 0)
+    //         // {
+    //         //     for (char i = 0; i < sizeof((*useIds)) / sizeof((*useIds)[0]); i++)
+    //         //     {
+    //         //         if (id_vale == (*useIds)[i])
+    //         //         {
+    //         //             interrupt_state = 1;
+    //         //             dev[id_vale].id = id_vale;
+    //         //             dev[id_vale].state = A7129_RX_BUFF[2];
+    //         //             dev[id_vale].type = A7129_RX_BUFF[5];
+    //         //             break;
+    //         //         }
+    //         //     }
+    //         //     ESP_LOGV("DEBUG", "");
+    //         // }
+    //         // else
+    //         // {
+    //         interrupt_state = 1;
+    //         dev[id_vale].id = id_vale;
+    //         dev[id_vale].state = end_data[2];
+    //         dev[id_vale].type = end_data[5];
+    //         ESP_LOGV("DEBUG", "");
+    //         // }
+    //         Serial.println(dev[id_vale].state);
+    //         Serial.println(A7129_RX_BUFF[2]);
+    //     }
+    // }
     void yblSend(idState_t idState)
     {
         // id1  id2  state  else  else type
@@ -723,10 +765,9 @@ namespace a7129namespace
     void yblResTask(void *ptr)
     {
         taskParam_t *c = (taskParam_t *)ptr;
-        useIds = &std::get<0>(c->config);
-        //  std::tie(useIds) = c->config;
+        String sendTo=std::get<0>( *(c->config));
+        useIds=&std::get<1>( *(c->config));
         send_state = 1;
-
         InitRF(); // init RF,最后一个字段0x8E,0x12,0x86
         delayMicroseconds(300);
         StrobeCMD(CMD_STBY);
@@ -734,31 +775,35 @@ namespace a7129namespace
         StrobeCMD(CMD_RX); // 设为接收模式
         pinMode(GIO1, INPUT_PULLUP);
         attachInterrupt(GIO1, yblInterrupt, FALLING); // 创建中断
+        structTypenamespace::notifyString_t obj = {
+            .sendTo_name = sendTo,
+            .msg = ""};
+        ESP_LOGV("DEBUG", "SUCCESS");
         while (1)
         {
-
             if (interrupt_state == 1)
             {
-                for (char i = 0; i < 6; i++)
+                for (int i = 0; i < 20; i++)
                 {
-                    Serial.print(dev[i].id);
-                    Serial.print(" ");
-                    Serial.print(dev[i].state);
-                    Serial.print(" ");
-                    Serial.print(dev[i].type);
-                    Serial.println(" ");
-                    // Serial.print(end_data[i], HEX);
-                    // Serial.print("  ");
+                    if (dev[i].id)
+                    {
+                        Serial.print("{id=");
+                        Serial.print(dev[i].id);
+                        Serial.print(", type=");
+                        Serial.print(dev[i].type);
+                        Serial.print(", state=");
+                        Serial.print(dev[i].state);
+                        Serial.println("}");
+                    }
                 }
-                //    xTaskNotify(c->sendTo_taskHandle, (uint32_t)obj, eSetValueWithOverwrite);
+                Serial.println("================");
+                // xTaskNotify(c->sendTo_taskHandle, (uint32_t)obj, eSetValueWithOverwrite);
                 interrupt_state = 0;
             }
             // 长线 发送；短线 接收
-
             // yblSend(dev[0]);
-            vTaskDelay(1000);
+            vTaskDelay(3000);
         }
     }
-
 };
 #endif

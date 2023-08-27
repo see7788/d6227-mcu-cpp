@@ -1,0 +1,29 @@
+{
+    "mcu_const": [
+        "1111",
+        "2222",
+        "3333"
+    ],
+    "mcu_log": [
+        "mcu_serial"
+    ],
+    "mcu_serial": [
+        "mcu_serial",
+        115200
+    ],
+    "mcu_net":{
+        "use":"eth",
+        "ap":["apname"],
+        "sta":["shuzijia","80508833"]
+    },
+    "mcu_dz003": [
+        "mcu_serial",
+        1000,
+        1000,
+        1000,
+        1000
+    ],
+    "mcu_ybl":[
+        "mcu_serial",[]
+    ]
+}

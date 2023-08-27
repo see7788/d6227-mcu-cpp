@@ -8,13 +8,13 @@ class MyNet
 public:
     typedef struct
     {
-        String init;
+        String use;
         std::tuple<String> ap;
         std::tuple<String, String> sta;
     } config_t;
     MyNet(config_t &param)
     {
-        String c = param.init;
+        String c = param.use;
         if (c == "ap")
         {
             WiFi.mode(WIFI_AP);
@@ -45,7 +45,6 @@ public:
         {
             ESP_LOGV("debug", "init false");
         }
-        ESP_LOGD("end", "%s", c.c_str());
     }
 };
 #endif

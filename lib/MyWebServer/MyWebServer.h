@@ -15,14 +15,14 @@ public:
   AsyncWebServer *server;
   AsyncWebSocket *ws;
   AsyncEventSource *events;
-  typedef std::tuple<int> config_MyWebServer_t;
+  typedef std::tuple<int> op_base_t;
   MyWebServer() //: server(80) //,ws("/websocket"),events("/events")
   {
     server = new AsyncWebServer(80);
     server->begin();
   };
-  typedef std::tuple<String> config_server_ws_t;
-  void server_ws(void)
+  typedef std::tuple<String> mcu_ws_op_t;
+  void mcu_ws(void)
   {
     ws = new AsyncWebSocket("/");
     ws->onEvent([this](AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len)
@@ -76,15 +76,15 @@ public:
       } });
     server->addHandler(ws);
   };
-  typedef std::tuple<String> config_server_events_t;
-  void server_events(void)
+  typedef std::tuple<String> mcu_events_op_t;
+  void mcu_events(void)
   {
     events->onConnect([](AsyncEventSourceClient *client)
                       { client->send("hello!", NULL, millis(), 1000); });
     server->addHandler(events);
   };
-  typedef std::tuple<String> config_server_ota_t;
-  void server_ota(void)
+  typedef std::tuple<String> mcu_ota_op_t;
+  void mcu_ota(void)
   {
     ArduinoOTA.setHostname("esp-async");
     ArduinoOTA.onStart([this]()
@@ -106,8 +106,8 @@ public:
 
     ArduinoOTA.begin();
   };
-  typedef std::tuple<String> config_server_html_t;
-  void server_html(void)
+  typedef std::tuple<String> mcu_html_op_t;
+  void mcu_html(void)
   {
     //"http://39.97.216.195:8083/index.html?wsIp="
     server->on("*", HTTP_GET, [](AsyncWebServerRequest *request)
@@ -122,14 +122,14 @@ public:
       response->print("</body></html>");
       request->send(response); });
   };
-  typedef std::tuple<String> config_server_fs_t;
-  void server_fs(void)
+  typedef std::tuple<String> mcu_fs_op_t;
+  void mcu_fs(void)
   {
     server->serveStatic("/", SPIFFS, "/").setCacheControl("max-age=600");
     DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "*");
   };
-  typedef std::tuple<String> config_server_onFileUpload_t;
-  void server_onFileUpload(void)
+  typedef std::tuple<String> mcu_onFileUpload_op_t;
+  void mcu_onFileUpload(void)
   {
     server->onFileUpload([](AsyncWebServerRequest *request, const String &filename, size_t index, uint8_t *data, size_t len, bool final)
                          {
@@ -139,8 +139,7 @@ public:
     if(final)
       Serial.printf("UploadEnd: %s (%u)\n", filename.c_str(), index+len); });
   }
-  typedef std::tuple<String> config_server_onRequestBody_t;
-  void server_onRequestBody(void)
+  void mcu_onRequestBody(void)
   {
     server->onRequestBody([](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total)
                           {
@@ -150,7 +149,8 @@ public:
     if(index + len == total)
       Serial.printf("BodyEnd: %u\n", total); });
   };
-  void server_onNotFound()
+  typedef std::tuple<String> mcu_onRequestBody_op_t;
+  void mcu_onNotFound()
   {
     server->onNotFound([](AsyncWebServerRequest *request)
                        {

@@ -15,16 +15,9 @@ public:
         : path(config)
     {
         this->begin_bool = this->begin(true);
-        if (!this->begin_bool)
-        {
-            ESP_LOGV("ERROR", "%s", "!this->begin_bool");
-        }
-        File file = this->open(path);
-        this->file_bool = file && !file.isDirectory();
-        if (!this->file_bool)
-        {
-            ESP_LOGV("ERROR", "%s", "!this->file_bool");
-        }
+        ESP_LOGV("DEBUG", "this->begin_bool=%s", this->begin_bool ? "true" : "false");
+        this->file_bool = this->exists(path);
+        ESP_LOGV("DEBUG", "this->file_bool=%s", this->file_bool ? "true" : "false");
     }
     void listFilePrint(const char *dirname, uint8_t levels)
     {
@@ -62,15 +55,30 @@ public:
             file = root.openNextFile();
         }
     }
-    DeserializationError readFile(JsonDocument &doc)
+
+    void readFile(JsonObject &obj)
     {
         File dataFile = this->open(this->path);
+        DynamicJsonDocument doc(1000);
         DeserializationError error = deserializeJson(doc, dataFile);
         dataFile.close();
-        return error;
+        if (error)
+        {
+            ESP_LOGE("ERROR", "%s", error.c_str());
+        }
+        else
+        {
+            JsonObject obj2 = doc.as<JsonObject>();
+            obj.set(obj2);
+            // String str;
+            // serializeJson(obj, str);
+            // ESP_LOGV("DEBUG", "%s", str);
+            // str="";
+            // serializeJson(obj2, str);
+            // ESP_LOGV("DEBUG", "%s", str);
+            // serializeJson(obj, Serial);
+        }
     }
-
-    // 返回写入到文件的字符串长度，0表示失败没写入
     int writeFile(JsonObject &obj)
     {
         File dataFile = this->open(path, "w");
