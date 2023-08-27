@@ -181,13 +181,12 @@ namespace dz003namespace
       dengread.add(digitalRead(deng.gpio[0]));
       dengread.add(digitalRead(deng.gpio[1]));
    }
-   typedef std::tuple<String, int, int, int, int> config_t; // v0v1abs_c，v0v1absLoop_c，loopNumber_c，set0tick_c，sendTo_name
+   typedef std::tuple<String, int, int, int, int> config_t; // sendTo_name,v0v1abs_c，v0v1absLoop_c，loopNumber_c，set0tick_c
    typedef struct
    {
       config_t *config;
-      // TaskHandle_t *sendTo_taskHandle;
+      TaskHandle_t sendTo_taskHandle;
    } taskParam_t;
-   // std::numeric_limits<int>::max() - 20000;
    void resTask(void *ptr)
    {
       taskParam_t *c = (taskParam_t *)ptr;
@@ -199,7 +198,7 @@ namespace dz003namespace
       v0v1absLoop = 0;
       int &loopNumber = frequency.log[2];
       loopNumber = 0;
-      String sendTo, msg = "[\"dz003State\"]";
+      String sendTo, msg = "[\"dz003.State\"]";
       int v0v1abs_c, v0v1absLoop_c, loopNumber_c, set0tick_c;
       std::tie(sendTo, v0v1abs_c, v0v1absLoop_c, loopNumber_c, set0tick_c) = *(c->config);
       structTypenamespace::notifyString_t obj = {
@@ -216,7 +215,7 @@ namespace dz003namespace
          {
             work_set(false);
          }
-         // xTaskNotify(c.sendTo_taskHandle, (uint32_t)obj, eSetValueWithOverwrite);
+         xTaskNotify(c->sendTo_taskHandle, (uint32_t)&obj, eSetValueWithOverwrite);
          frequency_valueset0();
          if (loopNumber > loopNumber_c)
          {

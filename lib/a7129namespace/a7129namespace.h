@@ -3,10 +3,6 @@
 #include <Arduino.h>
 #include <tuple>
 #include <vector>
-std::vector<int> vec = {10, 20, 30, 40, 50};
-
-int target = 30;
-auto it = std::find(vec.begin(), vec.end(), target);
 #include <unordered_map>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -655,7 +651,7 @@ namespace a7129namespace
             useIds_t ids;
             memcpy(ids, *useIds, sizeof(useIds_t));
             id_t id_vale = end_data[0] << 24 | end_data[1] << 16 | end_data[3] << 8 | end_data[4];
-            id_vale=id_vale|0xc400c18c;
+            id_vale=id_vale|0x000c18c;
             if (ids[0] != 0)
             {
                 for (char i = 0; i < sizeof(ids) / sizeof(ids[0]); i++)
@@ -688,41 +684,6 @@ namespace a7129namespace
             // ESP_LOGV("DEBUG", "send_state=%d,interrupt_state=%d", send_state, interrupt_state);
         }
     }
-    // std::unordered_map<id_t, idState_t> dev;不知为何不能用
-    // void yblInterrupt2(void)
-    // {
-    //     if (send_state == 1)
-    //     {
-    //         RxPacket();        // 接收数据,数据存放在A7129_RX_BUFF[],数组最多7个元素
-    //         StrobeCMD(CMD_RX); // 设置为接收模式
-    //         id_t id_vale = A7129_RX_BUFF[0] << 24 | A7129_RX_BUFF[1] << 16 | A7129_RX_BUFF[3] << 8 | A7129_RX_BUFF[4];
-    //         // if ((*useIds)[0] != 0)
-    //         // {
-    //         //     for (char i = 0; i < sizeof((*useIds)) / sizeof((*useIds)[0]); i++)
-    //         //     {
-    //         //         if (id_vale == (*useIds)[i])
-    //         //         {
-    //         //             interrupt_state = 1;
-    //         //             dev[id_vale].id = id_vale;
-    //         //             dev[id_vale].state = A7129_RX_BUFF[2];
-    //         //             dev[id_vale].type = A7129_RX_BUFF[5];
-    //         //             break;
-    //         //         }
-    //         //     }
-    //         //     ESP_LOGV("DEBUG", "");
-    //         // }
-    //         // else
-    //         // {
-    //         interrupt_state = 1;
-    //         dev[id_vale].id = id_vale;
-    //         dev[id_vale].state = end_data[2];
-    //         dev[id_vale].type = end_data[5];
-    //         ESP_LOGV("DEBUG", "");
-    //         // }
-    //         Serial.println(dev[id_vale].state);
-    //         Serial.println(A7129_RX_BUFF[2]);
-    //     }
-    // }
     void yblSend(idState_t idState)
     {
         // id1  id2  state  else  else type

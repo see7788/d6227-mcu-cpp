@@ -169,6 +169,7 @@ void jsonArrayParse(structTypenamespace::notifyJsonArray_t &arrObj)
   {
     JsonArray arr = arrObj.msg;
     String api = arr[0].as<String>();
+    ESP_LOGV("DEBUG", "jsonArrayParse:%s", api.c_str());
     if (api == "config_set")
     {
       JsonObject obj = arr[1].as<JsonObject>();
@@ -231,11 +232,11 @@ void jsonArrayParse(structTypenamespace::notifyJsonArray_t &arrObj)
       auto getdz003State = [&arr]()
       {
         arr.clear();
-        arr[0].set("dz003State");
+        arr[0].set("dz003.State");
         JsonObject obj = arr.createNestedObject();
         dz003namespace::state(obj);
       };
-      if (api == "dz003.state")
+      if (api == "dz003.State")
       {
         getdz003State();
       }
@@ -274,19 +275,27 @@ void jsonArrayParse(structTypenamespace::notifyJsonArray_t &arrObj)
 }
 void stdStringParse(structTypenamespace::notifyString_t &strObj)
 {
-  DynamicJsonDocument doc(3000);
+  state.mcu_serial->println("\n\n\n");
+  DynamicJsonDocument doc(1000);
   DeserializationError error = deserializeJson(doc, strObj.msg);
-  if (error)
-  {
-    strObj.msg = "[\"json pase error\",\"" + String(error.c_str()) + "\"]";
-    sendEr(strObj);
-  }
-  else
-  {
-    JsonArray arr = doc.to<JsonArray>();
-    structTypenamespace::notifyJsonArray_t arrObj = {strObj.sendTo_name, arr};
-    jsonArrayParse(arrObj);
-  }
+  state.mcu_serial->print("1(");
+  serializeJson(doc, *state.mcu_serial);
+  state.mcu_serial->println(")");
+  // if (error)
+  // {
+  //   strObj.msg = "[\"json pase error\",\"" + String(error.c_str()) + "\"]";
+  //   sendEr(strObj);
+  // }
+  // else
+  // {
+  ESP_LOGV("DEBUG", "stdStringParse%s", strObj.msg.c_str());
+  JsonArray arr = doc.as<JsonArray>();
+  state.mcu_serial->print("2(");
+  serializeJson(doc, *state.mcu_serial);
+  state.mcu_serial->println(")");
+  structTypenamespace::notifyJsonArray_t arrObj = {strObj.sendTo_name, arr};
+  jsonArrayParse(arrObj);
+  // }
 }
 void jsonArrayTask(void *nullparam)
 {
@@ -358,8 +367,8 @@ void setup(void)
   state.mcu_net = new MyNet(config.mcu_net);
   xEventGroupWaitBits(state.eg_Handle, EGBIG_MCU_NET, pdTRUE, pdTRUE, portMAX_DELAY);
 
-  xTaskCreate(stdStringTask, "stdStringTask", 1024 * 8, NULL, state.taskindex++, &state.stdStringTaskHandle);
-  xTaskCreate(jsonArrayTask, "jsonArrayTask", 1024 * 8, NULL, state.taskindex++, &state.jsonArrayTaskHandle);
+  xTaskCreate(stdStringTask, "stdStringTask", 1024 * 20, NULL, state.taskindex++, &state.stdStringTaskHandle);
+  xTaskCreate(jsonArrayTask, "jsonArrayTask", 1024 * 20, NULL, state.taskindex++, &state.jsonArrayTaskHandle);
   state.mcu_ybl_taskParam = {
       .config = &config.mcu_ybl,
       //  .sendTo_taskHandle = &state.stdStringTaskHandle
@@ -368,11 +377,8 @@ void setup(void)
   xTaskCreate(a7129namespace::yblResTask, "ybResTask", 1024 * 6, (void *)&state.mcu_ybl_taskParam, state.taskindex++, NULL);
   state.mcu_dz003_taskParam = {
       .config = &config.mcu_dz003,
-      // .sendTo_taskHandle = &state.stdStringTaskHandle
-  };
+      .sendTo_taskHandle = state.stdStringTaskHandle};
   xTaskCreate(dz003namespace::resTask, "mcu_dz003_Task", 1024 * 6, (void *)&state.mcu_dz003_taskParam, state.taskindex++, NULL);
-  // unordered_map 对象格式的json字符串
-
   // vTaskStartScheduler();
   ESP_LOGV("DEBUG", "success");
   vTaskDelete(NULL);
@@ -388,10 +394,10 @@ void loop(void)
   // JsonObject obj = doc.to<JsonObject>();
   // config_get(obj);
   // serializeJson(obj, Serial);
-  // StaticJsonDocument<2000> doc;
-  // JsonObject obj = doc.to<JsonObject>();
-  // config_get(obj);
-  // serializeJson(doc, *state.mcu_serial);
-  // ESP_LOGV("DEBUG", "===========\n\n");
+  StaticJsonDocument<2000> doc;
+  JsonObject obj = doc.to<JsonObject>();
+  config_get(obj);
+  serializeJson(doc, *state.mcu_serial);
+  ESP_LOGV("DEBUG", "===========\n\n");
   vTaskDelay(3000);
 }
