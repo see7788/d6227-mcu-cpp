@@ -651,7 +651,7 @@ namespace a7129namespace
             useIds_t ids;
             memcpy(ids, *useIds, sizeof(useIds_t));
             id_t id_vale = end_data[0] << 24 | end_data[1] << 16 | end_data[3] << 8 | end_data[4];
-            id_vale=id_vale|0x000c18c;
+            id_vale = id_vale|0x003dfbcf;
             if (ids[0] != 0)
             {
                 for (char i = 0; i < sizeof(ids) / sizeof(ids[0]); i++)
@@ -659,7 +659,9 @@ namespace a7129namespace
                     if (id_vale == ids[i])
                     {
                         interrupt_state = 1;
+                        dev[i].id = id_vale;
                         dev[i].state = end_data[2];
+                        dev[i].type = end_data[5];
                         return;
                     }
                 }
@@ -726,8 +728,8 @@ namespace a7129namespace
     void yblResTask(void *ptr)
     {
         taskParam_t *c = (taskParam_t *)ptr;
-        String sendTo=std::get<0>( *(c->config));
-        useIds=&std::get<1>( *(c->config));
+        String sendTo = std::get<0>(*(c->config));
+        useIds = &std::get<1>(*(c->config));
         send_state = 1;
         InitRF(); // init RF,最后一个字段0x8E,0x12,0x86
         delayMicroseconds(300);
@@ -748,16 +750,17 @@ namespace a7129namespace
                 {
                     if (dev[i].id)
                     {
-                        Serial.print("{id=");
-                        Serial.print(dev[i].id);
-                        Serial.print(", type=");
-                        Serial.print(dev[i].type);
-                        Serial.print(", state=");
-                        Serial.print(dev[i].state);
-                        Serial.println("}");
+                        // Serial.print("{id=");
+                        // Serial.print(dev[i].id);
+                        // Serial.print(", type=");
+                        // Serial.print(dev[i].type);
+                        // Serial.print(", state=");
+                        // Serial.print(dev[i].state);
+                        // Serial.println("}");
+                        ESP_LOGV("DEBUG", "id=%lld, type=%u, state=%u", dev[i].id, dev[i].type, dev[i].state);
                     }
                 }
-                Serial.println("================");
+                // Serial.println("================");
                 // xTaskNotify(c->sendTo_taskHandle, (uint32_t)obj, eSetValueWithOverwrite);
                 interrupt_state = 0;
             }
