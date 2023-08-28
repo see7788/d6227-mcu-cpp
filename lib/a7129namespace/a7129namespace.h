@@ -650,8 +650,9 @@ namespace a7129namespace
             Data_Output(A7129_RX_BUFF, end_data);
             useIds_t ids;
             memcpy(ids, *useIds, sizeof(useIds_t));
-            id_t id_vale = end_data[0] << 24 | end_data[1] << 16 | end_data[3] << 8 | end_data[4];
-            id_vale = id_vale|0x003dfbcf;
+            id_t id_vale = end_data[0] << 24 | end_data[1] << 16 | end_data[5] << 8|end_data[5];
+
+      
             if (ids[0] != 0)
             {
                 for (char i = 0; i < sizeof(ids) / sizeof(ids[0]); i++)
@@ -694,8 +695,8 @@ namespace a7129namespace
         PN9_Tab[0] = idState.id >> 24;
         PN9_Tab[1] = (idState.id >> 16) & 0xff;
         PN9_Tab[2] = idState.state;
-        PN9_Tab[3] = (idState.id >> 8) & 0xff; //
-        PN9_Tab[4] = idState.id & 0xff;        //
+        PN9_Tab[3] = (idState.id >> 8) & 0xff; 
+        PN9_Tab[4] = idState.id & 0xff;        
         PN9_Tab[5] = idState.type;
         InitRF();
         A7129_WriteFIFO(); // write data to TX FIFO
@@ -724,7 +725,6 @@ namespace a7129namespace
         */
         send_state = 1;
     }
-
     void yblResTask(void *ptr)
     {
         taskParam_t *c = (taskParam_t *)ptr;

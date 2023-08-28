@@ -16,7 +16,7 @@ public:
   AsyncWebSocket *ws;
   AsyncEventSource *events;
   typedef std::tuple<int> op_base_t;
-  MyWebServer() //: server(80) //,ws("/websocket"),events("/events")
+  MyWebServer()
   {
     server = new AsyncWebServer(80);
     server->begin();
@@ -150,7 +150,7 @@ public:
       Serial.printf("BodyEnd: %u\n", total); });
   };
   typedef std::tuple<String> mcu_onRequestBody_op_t;
-  void mcu_onNotFound()
+  void mcu_onNotFound(void)
   {
     server->onNotFound([](AsyncWebServerRequest *request)
                        {

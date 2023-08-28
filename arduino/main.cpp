@@ -40,14 +40,14 @@ struct config_t
 } config;
 struct state_t
 {
-  dz003namespace::taskParam_t mcu_dz003_taskParam;
-  a7129namespace::taskParam_t mcu_ybl_taskParam;
   EventGroupHandle_t eg_Handle;
   SemaphoreHandle_t configLock;
   TaskHandle_t stdStringTaskHandle;
   TaskHandle_t jsonArrayTaskHandle;
   String locIp;
   int taskindex;
+  dz003namespace::taskParam_t mcu_dz003_taskParam;
+  a7129namespace::taskParam_t mcu_ybl_taskParam;
   MyFs *mcu_configFs;
   MyNet *mcu_net;
   HardwareSerial *mcu_serial;
@@ -72,7 +72,11 @@ void esp_eg_on(void *registEr, esp_event_base_t postEr, int32_t eventId, void *e
     use = 1;
   }
   // xEventGroupSetBits(state.eg_Handle, EGBIG_CONFIGSUCCESS);
-  // xEventGroupWaitBits(state.eg_Handle, EGBIG_CONFIGSUCCESS, pdTRUE, pdTRUE, portMAX_DELAY);
+  /* EventBits_t eventBits =xEventGroupWaitBits(state.eg_Handle, EGBIG_CONFIGSUCCESS, pdTRUE, pdTRUE, portMAX_DELAY);
+  if ((eventBits & EGBIT_CONFIG_SUCCESS) == EGBIT_CONFIG_SUCCESS) {
+      // 执行相应的操作
+    }
+  */
   // if ((xEventGroupGetBits(state.eg_Handle) & EGBIG_MCU_NET) != 0)
   // char *data = eventData ? ((char *)eventData) : ((char *)"");
   // ESP_LOGV("DEBUG", "registEr:%s,use:%d,postEr:%s, eventId:%d,eventData:%s", er, use, postEr, eventId, (char *)eventData);
@@ -114,7 +118,7 @@ void config_set(JsonObject &obj)
     JsonArray mcu_ybluseIds = mcu_ybl[1].as<JsonArray>();
     for (int i = 0; i < mcu_ybluseIds.size(); ++i)
     {
-      get<1>(config.mcu_ybl)[i] = mcu_ybluseIds[i].as<long long>();
+      get<1>(config.mcu_ybl)[i] = mcu_ybluseIds[i].as<unsigned long>();
     }
   }
 }
