@@ -1,29 +1,29 @@
 {
-    "mcu_const": [
+    "const_mcu": [
         "1111",
         "2222",
         "3333"
     ],
-    "mcu_log": [
-        "mcu_serial"
+    "log_mcu": [
+        "serial_mcu"
     ],
-    "mcu_serial": [
-        "mcu_serial",
+    "serial_mcu": [
+        "serial_mcu",
         115200
     ],
-    "mcu_net":{
+    "net_mcu":{
         "use":"eth",
         "ap":["apname"],
         "sta":["shuzijia","80508833"]
     },
-    "mcu_dz003": [
-        "mcu_serial",
+    "dz003_mcu": [
+        "serial_mcu",
         1000,
         1000,
         1000,
         5000
     ],
-    "mcu_ybl":[
-        "mcu_serial",[]
+    "ybl_mcu":[
+        "serial_mcu",[]
     ]
 }

@@ -18,40 +18,38 @@
 #include <IPAddress.h>
 #include <SPIFFS.h>
 #include <ArduinoJson.h>
-#include <structTypenamespace.h>
 #include <HardwareSerial.h>
-#include <MyWebServer.h>
+#include <structTypenamespace.h>
 #include <dz003namespace.h>
+#include <a7129namespace.h>
 #include <MyFs.h>
 #include <MyNet.h>
-#include <a7129namespace.h>
+#include <MyIpc.h>
 #define EGBIG_CONFIGSUCCESS (1 << 0)
 #define EGBIG_MCU_NET (2 << 0)
 using namespace std;
 struct config_t
 {
-  tuple<String, String, String> mcu_const;
-  tuple<String> mcu_log;
-  tuple<String, int> mcu_serial;
-  MyNet::config_t mcu_net;
-  tuple<String, int> mcu_ble;
-  dz003namespace::config_t mcu_dz003;
-  a7129namespace::config_t mcu_ybl;
+  tuple<String, int> serial_mcu;
+  tuple<String> log_mcu;
+  tuple<String, String, String> const_mcu;
+  MyNet::config_t net_mcu;
+  dz003namespace::config_t dz003_mcu;
+  a7129namespace::config_t ybl_mcu;
 } config;
 struct state_t
 {
+  int taskindex;
+  dz003namespace::taskParam_t dz003_mcuTaskParam;
+  a7129namespace::taskParam_t ybl_mcuTaskParam;
   EventGroupHandle_t eg_Handle;
   SemaphoreHandle_t configLock;
-  TaskHandle_t stdStringTaskHandle;
+  TaskHandle_t StringTaskHandle;
   TaskHandle_t jsonArrayTaskHandle;
   String locIp;
-  int taskindex;
-  dz003namespace::taskParam_t mcu_dz003_taskParam;
-  a7129namespace::taskParam_t mcu_ybl_taskParam;
-  MyFs *mcu_configFs;
-  MyNet *mcu_net;
-  HardwareSerial *mcu_serial;
-  MyWebServer *mcu_webserver;
+  MyFs *configFs_mcu;
+  MyNet *net_mcu;
+  HardwareSerial *serial_mcu;
 } state;
 void esp_eg_on(void *registEr, esp_event_base_t postEr, int32_t eventId, void *eventData)
 {
@@ -84,90 +82,89 @@ void esp_eg_on(void *registEr, esp_event_base_t postEr, int32_t eventId, void *e
 }
 void config_set(JsonObject &obj)
 {
-  if (obj.containsKey("mcu_const"))
+  if (obj.containsKey("const_mcu"))
   {
-    JsonArray mcu_const = obj["mcu_const"].as<JsonArray>();
-    config.mcu_const = std::make_tuple(mcu_const[0].as<String>(), mcu_const[1].as<String>(), mcu_const[2].as<String>());
+    JsonArray const_mcu = obj["const_mcu"].as<JsonArray>();
+    config.const_mcu = std::make_tuple(const_mcu[0].as<String>(), const_mcu[1].as<String>(), const_mcu[2].as<String>());
   }
-  if (obj.containsKey("mcu_log"))
+  if (obj.containsKey("log_mcu"))
   {
-    JsonArray mcu_log = obj["mcu_log"].as<JsonArray>();
-    config.mcu_log = std::make_tuple(mcu_log[0].as<String>());
+    JsonArray log_mcu = obj["log_mcu"].as<JsonArray>();
+    config.log_mcu = std::make_tuple(log_mcu[0].as<String>());
   }
-  if (obj.containsKey("mcu_serial"))
+  if (obj.containsKey("serial_mcu"))
   {
-    JsonArray mcu_serial = obj["mcu_serial"].as<JsonArray>();
-    config.mcu_serial = std::make_tuple(mcu_serial[0].as<String>(), mcu_serial[1].as<int>());
+    JsonArray serial_mcu = obj["serial_mcu"].as<JsonArray>();
+    config.serial_mcu = std::make_tuple(serial_mcu[0].as<String>(), serial_mcu[1].as<int>());
   }
-  if (obj.containsKey("mcu_net"))
+  if (obj.containsKey("net_mcu"))
   {
-    JsonObject mcu_net = obj["mcu_net"].as<JsonObject>();
-    config.mcu_net.use = mcu_net["use"].as<String>();
-    config.mcu_net.ap = std::make_tuple(mcu_net["ap"][0].as<String>());
-    config.mcu_net.sta = std::make_tuple(mcu_net["sta"][0].as<String>(), mcu_net["sta"][1].as<String>());
+    JsonObject net_mcu = obj["net_mcu"].as<JsonObject>();
+    config.net_mcu.use = net_mcu["use"].as<String>();
+    config.net_mcu.ap = std::make_tuple(net_mcu["ap"][0].as<String>());
+    config.net_mcu.sta = std::make_tuple(net_mcu["sta"][0].as<String>(), net_mcu["sta"][1].as<String>());
   }
-  if (obj.containsKey("mcu_dz003"))
+  if (obj.containsKey("dz003_mcu"))
   {
-    JsonArray mcu_dz003 = obj["mcu_dz003"].as<JsonArray>();
-    config.mcu_dz003 = std::make_tuple(mcu_dz003[0].as<String>(), mcu_dz003[1].as<int>(), mcu_dz003[2].as<int>(), mcu_dz003[3].as<int>(), mcu_dz003[4].as<int>());
+    JsonArray dz003_mcu = obj["dz003_mcu"].as<JsonArray>();
+    config.dz003_mcu = std::make_tuple(dz003_mcu[0].as<String>(), dz003_mcu[1].as<int>(), dz003_mcu[2].as<int>(), dz003_mcu[3].as<int>(), dz003_mcu[4].as<int>());
   }
-  if (obj.containsKey("mcu_ybl"))
+  if (obj.containsKey("ybl_mcu"))
   {
-    JsonArray mcu_ybl = obj["mcu_ybl"].as<JsonArray>();
-    get<0>(config.mcu_ybl) = mcu_ybl[0].as<String>();
-    JsonArray mcu_ybluseIds = mcu_ybl[1].as<JsonArray>();
-    for (int i = 0; i < mcu_ybluseIds.size(); ++i)
+    JsonArray ybl_mcu = obj["ybl_mcu"].as<JsonArray>();
+    get<0>(config.ybl_mcu) = ybl_mcu[0].as<String>();
+    JsonArray ybl_mcuuseIds = ybl_mcu[1].as<JsonArray>();
+    for (int i = 0; i < ybl_mcuuseIds.size(); ++i)
     {
-      get<1>(config.mcu_ybl)[i] = mcu_ybluseIds[i].as<unsigned long>();
+      get<1>(config.ybl_mcu)[i] = ybl_mcuuseIds[i].as<a7129namespace::id_t>();
     }
   }
 }
 void config_get(JsonObject &obj)
 {
-  JsonArray mcu_const = obj.createNestedArray("mcu_const");
-  mcu_const.add(get<0>(config.mcu_const));
-  mcu_const.add(get<1>(config.mcu_const));
-  mcu_const.add(get<2>(config.mcu_const));
-  JsonArray mcu_log = obj.createNestedArray("mcu_log");
-  mcu_log.add(get<0>(config.mcu_log));
-  JsonArray mcu_serial = obj.createNestedArray("mcu_serial");
-  mcu_serial.add(get<0>(config.mcu_serial));
-  mcu_serial.add(get<1>(config.mcu_serial));
-  // mcu_net
-  JsonArray mcu_dz003 = obj.createNestedArray("mcu_dz003");
-  mcu_dz003.add(get<0>(config.mcu_dz003));
-  mcu_dz003.add(get<1>(config.mcu_dz003));
-  mcu_dz003.add(get<2>(config.mcu_dz003));
-  mcu_dz003.add(get<3>(config.mcu_dz003));
-  mcu_dz003.add(get<4>(config.mcu_dz003));
-  JsonArray mcu_ybl = obj.createNestedArray("mcu_ybl");
-  mcu_ybl.add(std::get<0>(config.mcu_ybl));
-  JsonArray mcu_ybluseIds = mcu_ybl.createNestedArray();
-  for (const auto &element : std::get<1>(config.mcu_ybl))
+  JsonArray const_mcu = obj.createNestedArray("const_mcu");
+  const_mcu.add(get<0>(config.const_mcu));
+  const_mcu.add(get<1>(config.const_mcu));
+  const_mcu.add(get<2>(config.const_mcu));
+  JsonArray log_mcu = obj.createNestedArray("log_mcu");
+  log_mcu.add(get<0>(config.log_mcu));
+  JsonArray serial_mcu = obj.createNestedArray("serial_mcu");
+  serial_mcu.add(get<0>(config.serial_mcu));
+  serial_mcu.add(get<1>(config.serial_mcu));
+  // net_mcu
+  JsonArray dz003_mcu = obj.createNestedArray("dz003_mcu");
+  dz003_mcu.add(get<0>(config.dz003_mcu));
+  dz003_mcu.add(get<1>(config.dz003_mcu));
+  dz003_mcu.add(get<2>(config.dz003_mcu));
+  dz003_mcu.add(get<3>(config.dz003_mcu));
+  dz003_mcu.add(get<4>(config.dz003_mcu));
+  JsonArray ybl_mcu = obj.createNestedArray("ybl_mcu");
+  ybl_mcu.add(std::get<0>(config.ybl_mcu));
+  JsonArray ybl_mcuuseIds = ybl_mcu.createNestedArray();
+  for (const auto &element : std::get<1>(config.ybl_mcu))
   {
     if (element)
-      mcu_ybluseIds.add(element);
+      ybl_mcuuseIds.add(element);
   }
-  JsonObject mcu_net = obj.createNestedObject("mcu_net");
-  mcu_net["use"] = config.mcu_net.use;
-  JsonArray muc_net_ap = mcu_net.createNestedArray("ap");
-  muc_net_ap.add(get<0>(config.mcu_net.ap));
-  JsonArray muc_net_sta = mcu_net.createNestedArray("sta");
-  muc_net_sta.add(get<0>(config.mcu_net.sta));
-  muc_net_sta.add(get<1>(config.mcu_net.sta));
+  JsonObject net_mcu = obj.createNestedObject("net_mcu");
+  net_mcu["use"] = config.net_mcu.use;
+  JsonArray muc_net_ap = net_mcu.createNestedArray("ap");
+  muc_net_ap.add(get<0>(config.net_mcu.ap));
+  JsonArray muc_net_sta = net_mcu.createNestedArray("sta");
+  muc_net_sta.add(get<0>(config.net_mcu.sta));
+  muc_net_sta.add(get<1>(config.net_mcu.sta));
 }
 void sendEr(structTypenamespace::notifyString_t &strObj)
 {
-  if (strObj.sendTo_name == "mcu_serial")
+  state.serial_mcu->println(strObj.sendTo_name);
+  if (strObj.sendTo_name == "serial_mcu")
   {
-    state.mcu_serial->println(strObj.msg);
+    state.serial_mcu->println(strObj.msg);
   }
   else
   {
-    strObj.msg = "[\"sendTo_name undefind\"]";
-    state.mcu_serial->println(strObj.msg);
+    state.serial_mcu->println("[\"sendTo_name undefind\"]");
   }
-  ESP_LOGV("DEBUG", "==");
 }
 void jsonArrayParse(structTypenamespace::notifyJsonArray_t &arrObj)
 {
@@ -194,7 +191,7 @@ void jsonArrayParse(structTypenamespace::notifyJsonArray_t &arrObj)
       arr.add("config_set");
       JsonObject obj = arr.createNestedObject();
       config_get(obj);
-      int success = state.mcu_configFs->writeFile(obj);
+      int success = state.configFs_mcu->writeFile(obj);
       if (success < 1)
       {
         ESP_LOGE("writeFile", "error");
@@ -205,7 +202,7 @@ void jsonArrayParse(structTypenamespace::notifyJsonArray_t &arrObj)
       arr.clear();
       arr.add("config_set");
       JsonObject obj = arr.createNestedObject();
-      state.mcu_configFs->readFile(obj);
+      state.configFs_mcu->readFile(obj);
       config_set(obj);
     }
     else if (api == "restart")
@@ -292,8 +289,8 @@ void stdStringParse(structTypenamespace::notifyString_t &strObj)
     // ESP_LOGV("DEBUG", "stdStringParse%s", strObj.msg.c_str());
     JsonArray arr = doc.as<JsonArray>();
     // ESP_LOGV("DEBUG", "===========\n\n(");
-    //  serializeJson(doc, *state.mcu_serial);
-    //  state.mcu_serial->println(")");
+    //  serializeJson(doc, *state.serial_mcu);
+    //  state.serial_mcu->println(")");
     structTypenamespace::notifyJsonArray_t arrObj = {strObj.sendTo_name, arr};
     jsonArrayParse(arrObj);
   }
@@ -305,26 +302,25 @@ void jsonArrayTask(void *nullparam)
   {
     if (xTaskNotifyWait(pdFALSE, ULONG_MAX, (uint32_t *)&ptr, portMAX_DELAY) == pdPASS)
     {
-      structTypenamespace::notifyJsonArray_t arrObj = *(structTypenamespace::notifyJsonArray_t *)ptr;
-      jsonArrayParse(arrObj);
+      structTypenamespace::notifyJsonArray_t obj = *(structTypenamespace::notifyJsonArray_t *)ptr;
+      jsonArrayParse(obj);
       // ulTaskNotifyValueClear(xTaskGetCurrentTaskHandle(), ptr); // 清除通知值
     }
   }
 }
-void stdStringTask(void *nullparam)
+void StringTask(void *nullparam)
 {
   uint32_t ptr;
   for (;;)
   {
     if (xTaskNotifyWait(pdFALSE, ULONG_MAX, (uint32_t *)&ptr, portMAX_DELAY) == pdPASS)
     {
-      structTypenamespace::notifyString_t strObj = *(structTypenamespace::notifyString_t *)ptr;
-      stdStringParse(strObj);
-      // ulTaskNotifyValueClear(xTaskGetCurrentTaskHandle(), ptr); // 清除通知值
+      structTypenamespace::notifyString_t obj = *(structTypenamespace::notifyString_t *)ptr;
+      stdStringParse(obj);
     }
   }
 }
-void mcu_esp(void)
+void espEvent_mcu(void)
 {
 
   ESP_ERROR_CHECK(esp_task_wdt_init(20000, false)); // 初始化看门狗
@@ -339,47 +335,45 @@ void mcu_esp(void)
   ESP_ERROR_CHECK(esp_event_handler_register(ETH_EVENT, ESP_EVENT_ANY_ID, esp_eg_on, (void *)__func__));
   ESP_ERROR_CHECK(esp_event_handler_register(SC_EVENT, ESP_EVENT_ANY_ID, esp_eg_on, (void *)__func__));
 }
-void mcu_serial_callback(void)
+void serial_mcu_callback(void)
 {
-  String info = state.mcu_serial->readStringUntil('\n');
-  String str = String(info.c_str());
-  structTypenamespace::notifyString_t strObj = {get<0>(config.mcu_serial), str};
-  stdStringParse(strObj);
+  String info = state.serial_mcu->readStringUntil('\n');
+  String send=get<0>(config.serial_mcu);
+  state.serial_mcu->println(send);
+  structTypenamespace::notifyString_t strObj = {send, info};
+  xTaskNotify(state.StringTaskHandle, (uint32_t)&strObj, eSetValueWithOverwrite);
 }
-
 void setup(void)
 {
   state.eg_Handle = xEventGroupCreate();
   state.configLock = xSemaphoreCreateMutex();
-  state.mcu_serial = &Serial;
-  state.mcu_serial->begin(115200);
-  mcu_esp();
-  state.mcu_configFs = new MyFs("/config.json");
+  espEvent_mcu();
+  state.configFs_mcu = new MyFs("/config.json");
   StaticJsonDocument<2000> doc;
   JsonObject obj = doc.to<JsonObject>();
-  state.mcu_configFs->readFile(obj);
+  state.configFs_mcu->readFile(obj);
   config_set(obj);
-  get<0>(config.mcu_const) = String(ESP.getEfuseMac());
-  // serializeJson(doc, *state.mcu_serial);
-  // state.mcu_serial->println("");
-  state.mcu_serial->onReceive(mcu_serial_callback);
-
-  state.mcu_net = new MyNet(config.mcu_net);
+  get<0>(config.const_mcu) = String(ESP.getEfuseMac());
+  state.serial_mcu = &Serial;
+  state.serial_mcu->begin(115200);
+  state.serial_mcu->onReceive(serial_mcu_callback);
+  ESP_LOGV("DEBUG", "----");
+  serializeJson(obj, *state.serial_mcu);
+  ESP_LOGV("DEBUG", "----");
+  state.net_mcu = new MyNet(config.net_mcu);
   xEventGroupWaitBits(state.eg_Handle, EGBIG_MCU_NET, pdTRUE, pdTRUE, portMAX_DELAY);
-
-  xTaskCreate(stdStringTask, "stdStringTask", 1024 * 20, NULL, state.taskindex++, &state.stdStringTaskHandle);
+  xTaskCreate(StringTask, "StringTask", 1024 * 20, NULL, state.taskindex++, &state.StringTaskHandle);
   xTaskCreate(jsonArrayTask, "jsonArrayTask", 1024 * 20, NULL, state.taskindex++, &state.jsonArrayTaskHandle);
-  state.mcu_ybl_taskParam = {
-      .config = &config.mcu_ybl,
-      //  .sendTo_taskHandle = &state.stdStringTaskHandle
+  state.ybl_mcuTaskParam = {
+      .config = &config.ybl_mcu,
+      //  .sendTo_taskHandle = &state.StringTaskHandle
   };
-
-  xTaskCreate(a7129namespace::yblResTask, "ybResTask", 1024 * 6, (void *)&state.mcu_ybl_taskParam, state.taskindex++, NULL);
-  state.mcu_dz003_taskParam = {
-      .config = &config.mcu_dz003,
-      .sendTo_taskHandle = state.stdStringTaskHandle};
-  xTaskCreate(dz003namespace::resTask, "mcu_dz003_Task", 1024 * 6, (void *)&state.mcu_dz003_taskParam, state.taskindex++, NULL);
-  // vTaskStartScheduler();
+  xTaskCreate(a7129namespace::yblResTask, "ybl_mcuTask", 1024 * 6, (void *)&state.ybl_mcuTaskParam, state.taskindex++, NULL);
+  state.dz003_mcuTaskParam = {
+      .config = &config.dz003_mcu,
+      .sendTo_taskHandle = state.StringTaskHandle};
+  xTaskCreate(dz003namespace::resTask, "dz003_mcuTask", 1024 * 6, (void *)&state.dz003_mcuTaskParam, state.taskindex++, NULL);
+  vTaskStartScheduler();
   ESP_LOGV("DEBUG", "=====================success===========================");
   vTaskDelete(NULL);
 }
@@ -393,7 +387,7 @@ void loop(void)
   StaticJsonDocument<2000> doc;
   JsonObject obj = doc.to<JsonObject>();
   config_get(obj);
-  serializeJson(doc, *state.mcu_serial);
+  serializeJson(doc, *state.serial_mcu);
   ESP_LOGV("DEBUG", "==");
 
   vTaskDelay(3000);

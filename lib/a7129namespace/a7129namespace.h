@@ -593,41 +593,44 @@ namespace a7129namespace
 
     static int Data_Output(Uint8 *Payload, Uint16 *DataBuf) // 数据输出
     {
-        // CRC_test(Payload, 3);
-        // // 深圳市易百珑科技有限公司
-        // // if ((CRC16_High == Payload[3]) && (CRC16_Low == Payload[4]))
-        // {
-        //     CRC_test(Payload, 6);
-        //     // if (CRC16_Low == Payload[6])
-        //     {
-        DataBuf[0] = Payload[0];
-        DataBuf[1] = Payload[1];
-        DataBuf[2] = Payload[2];
-        DataBuf[3] = Payload[3];
-        DataBuf[4] = Payload[4];
-        DataBuf[5] = Payload[5];
-        return (0); // 接收正确
-        //     }
+        CRC_test(Payload, 3);
+        // 深圳市易百珑科技有限公司
+        if ((CRC16_High == Payload[3]) && (CRC16_Low == Payload[4]))
+        {
+            CRC_test(Payload, 6);
+            if (CRC16_Low == Payload[6])
+            {
+                DataBuf[0] = Payload[0];
+                DataBuf[1] = Payload[1];
+                DataBuf[2] = Payload[2];
+                DataBuf[3] = Payload[3];
+                DataBuf[4] = Payload[4];
+                DataBuf[5] = Payload[5];
+                return (0); // 接收正确
+            }
 
-        //     else
-        //     {
-        //         return (1); // 接收错误
-        //     }
-        // }
-        // else
-        // {
-        //     return (2); // 接收错误
-        // }
+            else
+            {
+                return (1); // 接收错误
+            }
+        }
+        else
+        {
+            return (2); // 接收错误
+        }
     }
 
     /********/
     // crc
-    typedef long long id_t;
+    typedef unsigned long long id_t;
+    typedef Uint8 type_t;
+    typedef Uint8 state_t;
+
     typedef struct
     {
         id_t id;
-        Uint8 type;
-        Uint8 state;
+        type_t type;
+        state_t state;
     } idState_t;
     idState_t dev[20];
     typedef id_t useIds_t[20];
@@ -647,22 +650,39 @@ namespace a7129namespace
         {
             RxPacket();        // 接收数据,数据存放在A7129_RX_BUFF[],数组最多7个元素
             StrobeCMD(CMD_RX); // 设置为接收模式
-            Data_Output(A7129_RX_BUFF, end_data);
-            useIds_t ids;
-            memcpy(ids, *useIds, sizeof(useIds_t));
-            id_t id_vale = end_data[0] << 24 | end_data[1] << 16 | end_data[5] << 8|end_data[5];
+            if (Data_Output(A7129_RX_BUFF, end_data) != 0 && A7129_RX_BUFF[6] != 0xff)
+                return;
+            id_t id_vale = end_data[0] << 24 | end_data[1] << 16 | (end_data[5] & 0x0f) << 8 | ((end_data[5] & 0x3f) >> 4) * 2;
+            state_t state_vale = A7129_RX_BUFF[2];
+            type_t type_vale = (A7129_RX_BUFF[5] >> 6) + 1;
 
-      
-            if (ids[0] != 0)
+            if (A7129_RX_BUFF[6] == 0xff)
             {
-                for (char i = 0; i < sizeof(ids) / sizeof(ids[0]); i++)
+                id_t id_vale = end_data[0] << 24 | end_data[1] << 16 | end_data[3] << 8 | end_data[4];
+                state_t state_vale = A7129_RX_BUFF[2];
+                type_t type_vale = (A7129_RX_BUFF[5] >> 6) + 1;
+            }
+
+            // for(char i=0;i<sizeof(dev) / sizeof(dev[0]);i++)
+            // if(A7129_RX_BUFF[0]==dev[i].id>>24&&id_vale-dev[i].id>0&&interrupt_state==1) return ;
+
+            // Serial.print(A7129_RX_BUFF[0]);Serial.print(" ");
+            // Serial.print(A7129_RX_BUFF[1]);Serial.print(" ");
+            // Serial.print(A7129_RX_BUFF[5]);Serial.print(" ");
+            // Serial.println(" ");
+
+            if ((*useIds)[0] != 0)
+            {
+                for (char i = 0; i < sizeof(*useIds) / sizeof((*useIds)[0]); i++)
                 {
-                    if (id_vale == ids[i])
+
+                    if (id_vale == (*useIds)[i])
                     {
                         interrupt_state = 1;
                         dev[i].id = id_vale;
-                        dev[i].state = end_data[2];
-                        dev[i].type = end_data[5];
+                        dev[i].state = state_vale;
+                        dev[i].type = type_vale;
+
                         return;
                     }
                 }
@@ -674,14 +694,14 @@ namespace a7129namespace
                     if (dev[i].id == id_vale)
                     {
                         interrupt_state = 1;
-                        dev[i].state = end_data[2];
+                        dev[i].state = state_vale;
                         return;
                     }
                 }
                 interrupt_state = 1;
                 dev[devMaxIndex].id = id_vale;
-                dev[devMaxIndex].state = end_data[2];
-                dev[devMaxIndex].type = end_data[5];
+                dev[devMaxIndex].state = state_vale;
+                dev[devMaxIndex].type = type_vale;
                 devMaxIndex++;
             }
             // ESP_LOGV("DEBUG", "send_state=%d,interrupt_state=%d", send_state, interrupt_state);
@@ -695,34 +715,20 @@ namespace a7129namespace
         PN9_Tab[0] = idState.id >> 24;
         PN9_Tab[1] = (idState.id >> 16) & 0xff;
         PN9_Tab[2] = idState.state;
-        PN9_Tab[3] = (idState.id >> 8) & 0xff; 
-        PN9_Tab[4] = idState.id & 0xff;        
+        PN9_Tab[3] = (idState.id >> 8) & 0xff;
+        PN9_Tab[4] = idState.id & 0xff;
         PN9_Tab[5] = idState.type;
+        PN9_Tab[6] = 0xff;
         InitRF();
         A7129_WriteFIFO(); // write data to TX FIFO
         StrobeCMD(CMD_TX);
         delayMicroseconds(10);
-
-        // while (digitalRead(GIO1));
-
         vTaskDelay(30);
-
         InitRF();
         delayMicroseconds(300);
         StrobeCMD(CMD_STBY);
         StrobeCMD(CMD_PLL);
         StrobeCMD(CMD_RX); // 设为接收模式
-        /*
-        for (char k = 0; k < 6; k++)
-        {
-            Serial.print(PN9_Tab[k], HEX);
-            Serial.print("  ");
-        }
-
-        Serial.println("  ");
-        Serial.print(end_data[i], HEX);
-        Serial.println("  ");
-        */
         send_state = 1;
     }
     void yblResTask(void *ptr)
@@ -750,13 +756,6 @@ namespace a7129namespace
                 {
                     if (dev[i].id)
                     {
-                        // Serial.print("{id=");
-                        // Serial.print(dev[i].id);
-                        // Serial.print(", type=");
-                        // Serial.print(dev[i].type);
-                        // Serial.print(", state=");
-                        // Serial.print(dev[i].state);
-                        // Serial.println("}");
                         ESP_LOGV("DEBUG", "id=%lld, type=%u, state=%u", dev[i].id, dev[i].type, dev[i].state);
                     }
                 }
