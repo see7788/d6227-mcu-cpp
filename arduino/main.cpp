@@ -44,8 +44,8 @@ struct state_t
   a7129namespace::taskParam_t ybl_mcuTaskParam;
   EventGroupHandle_t eg_Handle;
   SemaphoreHandle_t configLock;
-  TaskHandle_t StringTaskHandle;
-  TaskHandle_t jsonArrayTaskHandle;
+  TaskHandle_t parseStringTaskHandle;
+  TaskHandle_t parsejsonArrayTaskHandle;
   String locIp;
   MyFs *configFs_mcu;
   MyNet *net_mcu;
@@ -156,7 +156,7 @@ void config_get(JsonObject &obj)
 }
 void sendEr(structTypenamespace::notifyString_t &strObj)
 {
-  state.serial_mcu->println(strObj.sendTo_name);
+  ESP_LOGV("DEBUG", "%s", strObj.sendTo_name.c_str());
   if (strObj.sendTo_name == "serial_mcu")
   {
     state.serial_mcu->println(strObj.msg);
@@ -166,13 +166,13 @@ void sendEr(structTypenamespace::notifyString_t &strObj)
     state.serial_mcu->println("[\"sendTo_name undefind\"]");
   }
 }
-void jsonArrayParse(structTypenamespace::notifyJsonArray_t &arrObj)
+void parseJsonArray(structTypenamespace::notifyJsonArray_t &arrObj)
 {
   if (xSemaphoreTake(state.configLock, portMAX_DELAY) == pdTRUE)
   {
     JsonArray arr = arrObj.msg;
     String api = arr[0].as<String>();
-    // ESP_LOGV("DEBUG", "jsonArrayParse:%s", api.c_str());
+    // ESP_LOGV("DEBUG", "parseJsonArray:%s", api.c_str());
     if (api == "config_set")
     {
       JsonObject obj = arr[1].as<JsonObject>();
@@ -271,31 +271,12 @@ void jsonArrayParse(structTypenamespace::notifyJsonArray_t &arrObj)
     String msg;
     serializeJson(arr, msg);
     structTypenamespace::notifyString_t strObj = {arrObj.sendTo_name, msg};
+    ESP_LOGV("DEBUG", "%s", arrObj.sendTo_name.c_str());
     sendEr(strObj);
     xSemaphoreGive(state.configLock);
   }
 }
-void stdStringParse(structTypenamespace::notifyString_t &strObj)
-{
-  StaticJsonDocument<2000> doc;
-  DeserializationError error = deserializeJson(doc, strObj.msg);
-  if (error)
-  {
-    strObj.msg = "[\"json pase error\",\"" + String(error.c_str()) + "\"]";
-    sendEr(strObj);
-  }
-  else
-  {
-    // ESP_LOGV("DEBUG", "stdStringParse%s", strObj.msg.c_str());
-    JsonArray arr = doc.as<JsonArray>();
-    // ESP_LOGV("DEBUG", "===========\n\n(");
-    //  serializeJson(doc, *state.serial_mcu);
-    //  state.serial_mcu->println(")");
-    structTypenamespace::notifyJsonArray_t arrObj = {strObj.sendTo_name, arr};
-    jsonArrayParse(arrObj);
-  }
-}
-void jsonArrayTask(void *nullparam)
+void parsejsonArrayTask(void *nullparam)
 {
   uint32_t ptr;
   for (;;)
@@ -303,12 +284,12 @@ void jsonArrayTask(void *nullparam)
     if (xTaskNotifyWait(pdFALSE, ULONG_MAX, (uint32_t *)&ptr, portMAX_DELAY) == pdPASS)
     {
       structTypenamespace::notifyJsonArray_t obj = *(structTypenamespace::notifyJsonArray_t *)ptr;
-      jsonArrayParse(obj);
-      // ulTaskNotifyValueClear(xTaskGetCurrentTaskHandle(), ptr); // 清除通知值
+      parseJsonArray(obj);
+      ulTaskNotifyValueClear(xTaskGetCurrentTaskHandle(), ptr); // 清除通知值
     }
   }
 }
-void StringTask(void *nullparam)
+void parseStringTask(void *nullparam)
 {
   uint32_t ptr;
   for (;;)
@@ -316,7 +297,21 @@ void StringTask(void *nullparam)
     if (xTaskNotifyWait(pdFALSE, ULONG_MAX, (uint32_t *)&ptr, portMAX_DELAY) == pdPASS)
     {
       structTypenamespace::notifyString_t obj = *(structTypenamespace::notifyString_t *)ptr;
-      stdStringParse(obj);
+      StaticJsonDocument<2000> doc;
+      DeserializationError error = deserializeJson(doc, obj.msg);
+      ESP_LOGV("DEBUG", "%s", obj.sendTo_name.c_str());
+      if (error)
+      {
+        obj.msg = "[\"json pase error\",\"" + String(error.c_str()) + "\",\"" + obj.msg + "\"]";
+        sendEr(obj);
+      }
+      else
+      {
+        JsonArray arr = doc.as<JsonArray>();
+        structTypenamespace::notifyJsonArray_t arrObj = {obj.sendTo_name, arr};
+        parseJsonArray(arrObj);
+      }
+      ulTaskNotifyValueClear(xTaskGetCurrentTaskHandle(), ptr); // 清除通知值
     }
   }
 }
@@ -337,41 +332,42 @@ void espEvent_mcu(void)
 }
 void serial_mcu_callback(void)
 {
-  String info = state.serial_mcu->readStringUntil('\n');
-  String send=get<0>(config.serial_mcu);
-  state.serial_mcu->println(send);
-  structTypenamespace::notifyString_t strObj = {send, info};
-  xTaskNotify(state.StringTaskHandle, (uint32_t)&strObj, eSetValueWithOverwrite);
+  structTypenamespace::notifyString_t *obj = new structTypenamespace::notifyString_t{
+      .sendTo_name = get<0>(config.serial_mcu),
+      .msg = state.serial_mcu->readStringUntil('\n')};
+  ESP_LOGV("DEBUG", "%s", obj->sendTo_name.c_str());
+  xTaskNotify(state.parseStringTaskHandle, (uint32_t)obj, eSetValueWithOverwrite);
 }
 void setup(void)
 {
+  state.serial_mcu = &Serial;
+  state.serial_mcu->begin(115200);
   state.eg_Handle = xEventGroupCreate();
   state.configLock = xSemaphoreCreateMutex();
   espEvent_mcu();
+  xTaskCreate(parseStringTask, "parseStringTask", 1024 * 20, NULL, state.taskindex++, &state.parseStringTaskHandle);
+  xTaskCreate(parsejsonArrayTask, "parsejsonArrayTask", 1024 * 20, NULL, state.taskindex++, &state.parsejsonArrayTaskHandle);
   state.configFs_mcu = new MyFs("/config.json");
   StaticJsonDocument<2000> doc;
   JsonObject obj = doc.to<JsonObject>();
   state.configFs_mcu->readFile(obj);
   config_set(obj);
-  get<0>(config.const_mcu) = String(ESP.getEfuseMac());
-  state.serial_mcu = &Serial;
-  state.serial_mcu->begin(115200);
+  state.serial_mcu->begin(get<1>(config.serial_mcu));
   state.serial_mcu->onReceive(serial_mcu_callback);
-  ESP_LOGV("DEBUG", "----");
-  serializeJson(obj, *state.serial_mcu);
-  ESP_LOGV("DEBUG", "----");
+  get<0>(config.const_mcu) = String(ESP.getEfuseMac());
+  // ESP_LOGV("DEBUG", "----");
+  // serializeJson(obj, *state.serial_mcu);
+  // ESP_LOGV("DEBUG", "----");
   state.net_mcu = new MyNet(config.net_mcu);
   xEventGroupWaitBits(state.eg_Handle, EGBIG_MCU_NET, pdTRUE, pdTRUE, portMAX_DELAY);
-  xTaskCreate(StringTask, "StringTask", 1024 * 20, NULL, state.taskindex++, &state.StringTaskHandle);
-  xTaskCreate(jsonArrayTask, "jsonArrayTask", 1024 * 20, NULL, state.taskindex++, &state.jsonArrayTaskHandle);
   state.ybl_mcuTaskParam = {
       .config = &config.ybl_mcu,
-      //  .sendTo_taskHandle = &state.StringTaskHandle
+      //  .sendTo_taskHandle = &state.parseStringTaskHandle
   };
   xTaskCreate(a7129namespace::yblResTask, "ybl_mcuTask", 1024 * 6, (void *)&state.ybl_mcuTaskParam, state.taskindex++, NULL);
   state.dz003_mcuTaskParam = {
       .config = &config.dz003_mcu,
-      .sendTo_taskHandle = state.StringTaskHandle};
+      .sendTo_taskHandle = state.parseStringTaskHandle};
   xTaskCreate(dz003namespace::resTask, "dz003_mcuTask", 1024 * 6, (void *)&state.dz003_mcuTaskParam, state.taskindex++, NULL);
   vTaskStartScheduler();
   ESP_LOGV("DEBUG", "=====================success===========================");

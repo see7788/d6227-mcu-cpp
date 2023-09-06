@@ -198,12 +198,9 @@ namespace dz003namespace
       v0v1absLoop = 0;
       int &loopNumber = frequency.log[2];
       loopNumber = 0;
-      String sendTo, msg = "[\"dz003.State\"]";
+      String sendTo;
       int v0v1abs_c, v0v1absLoop_c, loopNumber_c, set0tick_c;
       std::tie(sendTo, v0v1abs_c, v0v1absLoop_c, loopNumber_c, set0tick_c) = *(c->config);
-      structTypenamespace::notifyString_t obj = {
-          .sendTo_name = sendTo,
-          .msg = msg};
       ESP_LOGV("DEBUG","SUCCESS");
       for (;;)
       {
@@ -215,7 +212,10 @@ namespace dz003namespace
          {
             work_set(false);
          }
-         xTaskNotify(c->sendTo_taskHandle, (uint32_t)&obj, eSetValueWithOverwrite);
+         structTypenamespace::notifyString_t *obj = new structTypenamespace::notifyString_t{
+          .sendTo_name = sendTo,
+          .msg = "[\"dz003.State\"]"};
+         xTaskNotify(c->sendTo_taskHandle, (uint32_t)obj, eSetValueWithOverwrite);
          frequency_valueset0();
          if (loopNumber > loopNumber_c)
          {

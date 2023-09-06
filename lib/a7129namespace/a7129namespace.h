@@ -744,9 +744,6 @@ namespace a7129namespace
         StrobeCMD(CMD_RX); // 设为接收模式
         pinMode(GIO1, INPUT_PULLUP);
         attachInterrupt(GIO1, yblInterrupt, FALLING); // 创建中断
-        structTypenamespace::notifyString_t obj = {
-            .sendTo_name = sendTo,
-            .msg = ""};
         ESP_LOGV("DEBUG", "SUCCESS");
         while (1)
         {
@@ -759,11 +756,12 @@ namespace a7129namespace
                         ESP_LOGV("DEBUG", "id=%lld, type=%u, state=%u", dev[i].id, dev[i].type, dev[i].state);
                     }
                 }
-                // Serial.println("================");
+                structTypenamespace::notifyString_t *obj = new structTypenamespace::notifyString_t{
+                    .sendTo_name = sendTo,
+                    .msg = "[\"ybl.State\"]"};
                 // xTaskNotify(c->sendTo_taskHandle, (uint32_t)obj, eSetValueWithOverwrite);
                 interrupt_state = 0;
             }
-            // 长线 发送；短线 接收
             // yblSend(dev[0]);
             vTaskDelay(3000);
         }
