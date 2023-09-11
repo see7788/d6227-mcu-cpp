@@ -25,31 +25,31 @@
 #include <MyFs.h>
 #include <MyNet.h>
 #include <MyIpc.h>
-#define EGBIG_CONFIGSUCCESS (1 << 0)
-#define EGBIG_MCU_NET (2 << 0)
+#define EGBIG_MCU_NET (1 << 0)
 using namespace std;
 struct config_t
 {
-  tuple<String, int> serial_mcu;
-  tuple<String> log_mcu;
-  tuple<String, String, String> const_mcu;
-  MyNet::config_t net_mcu;
-  dz003namespace::config_t dz003_mcu;
-  a7129namespace::config_t ybl_mcu;
+  tuple<String, int> serial_mcu00;
+  tuple<String> log_mcu00;
+  MyNet::config_t net_mcu00;
+  dz003namespace::config_t dz003_mcu00;
+  a7129namespace::config_t ybl_mcu00;
 } config;
 struct state_t
 {
   int taskindex;
-  dz003namespace::taskParam_t dz003_mcuTaskParam;
-  a7129namespace::taskParam_t ybl_mcuTaskParam;
+  dz003namespace::taskParam_t dz003_mcu00TaskParam;
+  a7129namespace::taskParam_t ybl_mcu00TaskParam;
   EventGroupHandle_t eg_Handle;
   SemaphoreHandle_t configLock;
   TaskHandle_t parseStringTaskHandle;
   TaskHandle_t parsejsonArrayTaskHandle;
   String locIp;
+  String macId;
+  String packageId;
   MyFs *configFs_mcu;
-  MyNet *net_mcu;
-  HardwareSerial *serial_mcu;
+  MyNet *net_mcu00;
+  HardwareSerial *serial_mcu00;
 } state;
 void esp_eg_on(void *registEr, esp_event_base_t postEr, int32_t eventId, void *eventData)
 {
@@ -72,7 +72,7 @@ void esp_eg_on(void *registEr, esp_event_base_t postEr, int32_t eventId, void *e
   // xEventGroupSetBits(state.eg_Handle, EGBIG_CONFIGSUCCESS);
   /* EventBits_t eventBits =xEventGroupWaitBits(state.eg_Handle, EGBIG_CONFIGSUCCESS, pdTRUE, pdTRUE, portMAX_DELAY);
   if ((eventBits & EGBIT_CONFIG_SUCCESS) == EGBIT_CONFIG_SUCCESS) {
-      // 执行相应的操作
+  // 执行相应的操作
     }
   */
   // if ((xEventGroupGetBits(state.eg_Handle) & EGBIG_MCU_NET) != 0)
@@ -82,89 +82,87 @@ void esp_eg_on(void *registEr, esp_event_base_t postEr, int32_t eventId, void *e
 }
 void config_set(JsonObject &obj)
 {
-  if (obj.containsKey("const_mcu"))
+  if (obj.containsKey("log_mcu00"))
   {
-    JsonArray const_mcu = obj["const_mcu"].as<JsonArray>();
-    config.const_mcu = std::make_tuple(const_mcu[0].as<String>(), const_mcu[1].as<String>(), const_mcu[2].as<String>());
+    JsonArray log_mcu00 = obj["log_mcu00"].as<JsonArray>();
+    config.log_mcu00 = std::make_tuple(log_mcu00[0].as<String>());
   }
-  if (obj.containsKey("log_mcu"))
+  if (obj.containsKey("serial_mcu00"))
   {
-    JsonArray log_mcu = obj["log_mcu"].as<JsonArray>();
-    config.log_mcu = std::make_tuple(log_mcu[0].as<String>());
+    JsonArray serial_mcu00 = obj["serial_mcu00"].as<JsonArray>();
+    config.serial_mcu00 = std::make_tuple(serial_mcu00[0].as<String>(), serial_mcu00[1].as<int>());
   }
-  if (obj.containsKey("serial_mcu"))
+  if (obj.containsKey("net_mcu00"))
   {
-    JsonArray serial_mcu = obj["serial_mcu"].as<JsonArray>();
-    config.serial_mcu = std::make_tuple(serial_mcu[0].as<String>(), serial_mcu[1].as<int>());
+    JsonObject net_mcu00 = obj["net_mcu00"].as<JsonObject>();
+    config.net_mcu00.use = net_mcu00["use"].as<String>();
+    config.net_mcu00.ap = std::make_tuple(net_mcu00["ap"][0].as<String>());
+    config.net_mcu00.sta = std::make_tuple(net_mcu00["sta"][0].as<String>(), net_mcu00["sta"][1].as<String>());
   }
-  if (obj.containsKey("net_mcu"))
+  if (obj.containsKey("dz003_mcu00"))
   {
-    JsonObject net_mcu = obj["net_mcu"].as<JsonObject>();
-    config.net_mcu.use = net_mcu["use"].as<String>();
-    config.net_mcu.ap = std::make_tuple(net_mcu["ap"][0].as<String>());
-    config.net_mcu.sta = std::make_tuple(net_mcu["sta"][0].as<String>(), net_mcu["sta"][1].as<String>());
+    JsonArray dz003_mcu00 = obj["dz003_mcu00"].as<JsonArray>();
+    config.dz003_mcu00 = std::make_tuple(dz003_mcu00[0].as<String>(), dz003_mcu00[1].as<int>(), dz003_mcu00[2].as<int>(), dz003_mcu00[3].as<int>(), dz003_mcu00[4].as<int>());
   }
-  if (obj.containsKey("dz003_mcu"))
+  if (obj.containsKey("ybl_mcu00"))
   {
-    JsonArray dz003_mcu = obj["dz003_mcu"].as<JsonArray>();
-    config.dz003_mcu = std::make_tuple(dz003_mcu[0].as<String>(), dz003_mcu[1].as<int>(), dz003_mcu[2].as<int>(), dz003_mcu[3].as<int>(), dz003_mcu[4].as<int>());
-  }
-  if (obj.containsKey("ybl_mcu"))
-  {
-    JsonArray ybl_mcu = obj["ybl_mcu"].as<JsonArray>();
-    get<0>(config.ybl_mcu) = ybl_mcu[0].as<String>();
-    JsonArray ybl_mcuuseIds = ybl_mcu[1].as<JsonArray>();
-    for (int i = 0; i < ybl_mcuuseIds.size(); ++i)
+    JsonArray ybl_mcu00 = obj["ybl_mcu00"].as<JsonArray>();
+    get<0>(config.ybl_mcu00) = ybl_mcu00[0].as<String>();
+    JsonArray ybl_mcu00useIds = ybl_mcu00[1].as<JsonArray>();
+    for (int i = 0; i < ybl_mcu00useIds.size(); ++i)
     {
-      get<1>(config.ybl_mcu)[i] = ybl_mcuuseIds[i].as<a7129namespace::id_t>();
+      get<1>(config.ybl_mcu00)[i] = ybl_mcu00useIds[i].as<a7129namespace::id_t>();
     }
   }
 }
 void config_get(JsonObject &obj)
 {
-  JsonArray const_mcu = obj.createNestedArray("const_mcu");
-  const_mcu.add(get<0>(config.const_mcu));
-  const_mcu.add(get<1>(config.const_mcu));
-  const_mcu.add(get<2>(config.const_mcu));
-  JsonArray log_mcu = obj.createNestedArray("log_mcu");
-  log_mcu.add(get<0>(config.log_mcu));
-  JsonArray serial_mcu = obj.createNestedArray("serial_mcu");
-  serial_mcu.add(get<0>(config.serial_mcu));
-  serial_mcu.add(get<1>(config.serial_mcu));
-  // net_mcu
-  JsonArray dz003_mcu = obj.createNestedArray("dz003_mcu");
-  dz003_mcu.add(get<0>(config.dz003_mcu));
-  dz003_mcu.add(get<1>(config.dz003_mcu));
-  dz003_mcu.add(get<2>(config.dz003_mcu));
-  dz003_mcu.add(get<3>(config.dz003_mcu));
-  dz003_mcu.add(get<4>(config.dz003_mcu));
-  JsonArray ybl_mcu = obj.createNestedArray("ybl_mcu");
-  ybl_mcu.add(std::get<0>(config.ybl_mcu));
-  JsonArray ybl_mcuuseIds = ybl_mcu.createNestedArray();
-  for (const auto &element : std::get<1>(config.ybl_mcu))
+  JsonArray log_mcu00 = obj.createNestedArray("log_mcu00");
+  log_mcu00.add(get<0>(config.log_mcu00));
+  JsonArray serial_mcu00 = obj.createNestedArray("serial_mcu00");
+  serial_mcu00.add(get<0>(config.serial_mcu00));
+  serial_mcu00.add(get<1>(config.serial_mcu00));
+  // net_mcu00
+  JsonArray dz003_mcu00 = obj.createNestedArray("dz003_mcu00");
+  dz003_mcu00.add(get<0>(config.dz003_mcu00));
+  dz003_mcu00.add(get<1>(config.dz003_mcu00));
+  dz003_mcu00.add(get<2>(config.dz003_mcu00));
+  dz003_mcu00.add(get<3>(config.dz003_mcu00));
+  dz003_mcu00.add(get<4>(config.dz003_mcu00));
+  JsonArray ybl_mcu00 = obj.createNestedArray("ybl_mcu00");
+  ybl_mcu00.add(std::get<0>(config.ybl_mcu00));
+  JsonArray ybl_mcu00useIds = ybl_mcu00.createNestedArray();
+  for (const auto &element : std::get<1>(config.ybl_mcu00))
   {
     if (element)
-      ybl_mcuuseIds.add(element);
+      ybl_mcu00useIds.add(element);
   }
-  JsonObject net_mcu = obj.createNestedObject("net_mcu");
-  net_mcu["use"] = config.net_mcu.use;
-  JsonArray muc_net_ap = net_mcu.createNestedArray("ap");
-  muc_net_ap.add(get<0>(config.net_mcu.ap));
-  JsonArray muc_net_sta = net_mcu.createNestedArray("sta");
-  muc_net_sta.add(get<0>(config.net_mcu.sta));
-  muc_net_sta.add(get<1>(config.net_mcu.sta));
+  JsonObject net_mcu00 = obj.createNestedObject("net_mcu00");
+  net_mcu00["use"] = config.net_mcu00.use;
+  JsonArray muc_net_ap = net_mcu00.createNestedArray("ap");
+  muc_net_ap.add(get<0>(config.net_mcu00.ap));
+  JsonArray muc_net_sta = net_mcu00.createNestedArray("sta");
+  muc_net_sta.add(get<0>(config.net_mcu00.sta));
+  muc_net_sta.add(get<1>(config.net_mcu00.sta));
 }
 void sendEr(structTypenamespace::notifyString_t &strObj)
 {
-  ESP_LOGV("DEBUG", "%s", strObj.sendTo_name.c_str());
-  if (strObj.sendTo_name == "serial_mcu")
+  // ESP_LOGV("DEBUG", "%s", strObj.sendTo_name.c_str());
+  if (strObj.sendTo_name == "serial_mcu00")
   {
-    state.serial_mcu->println(strObj.msg);
+    state.serial_mcu00->println(strObj.msg);
   }
   else
   {
-    state.serial_mcu->println("[\"sendTo_name undefind\"]");
+    state.serial_mcu00->println("[\"sendTo_name undefind\"]");
   }
+}
+void sendLog(String &str)
+{
+  structTypenamespace::notifyString_t obj = {
+      .sendTo_name = get<0>(config.log_mcu00),
+      .msg = str};
+  sendEr(obj);
 }
 void parseJsonArray(structTypenamespace::notifyJsonArray_t &arrObj)
 {
@@ -215,7 +213,8 @@ void parseJsonArray(structTypenamespace::notifyJsonArray_t &arrObj)
       arr.clear();
       arr.add("state_set");
       JsonObject obj = arr.createNestedObject();
-      JsonObject egBit = obj.createNestedObject("egBit");
+      JsonObject data = obj.createNestedObject("mcu00");
+      JsonObject egBit = data.createNestedObject("egBit");
       for (int i = sizeof(ulBits) * 8 - 1; i >= 0; i--)
       { // 循环输出每个二进制位
         uint32_t mask = 1 << i;
@@ -228,16 +227,20 @@ void parseJsonArray(structTypenamespace::notifyJsonArray_t &arrObj)
           egBit[String(i)] = false;
         }
       }
+      obj["taskindex"] = state.taskindex;
       obj["locIp"] = state.locIp;
+      obj["macId"] = state.macId;
+      obj["packageId"] = state.packageId;
     }
     else
     {
       auto getdz003State = [&arr]()
       {
         arr.clear();
-        arr[0].set("dz003.State");
+        arr[0].set("state_set");
         JsonObject obj = arr.createNestedObject();
-        dz003namespace::state(obj);
+        JsonObject data = obj.createNestedObject("dz003_mcu00");
+        dz003namespace::state(data);
       };
       if (api == "dz003.State")
       {
@@ -268,10 +271,11 @@ void parseJsonArray(structTypenamespace::notifyJsonArray_t &arrObj)
         arr[0].set("mcu pass");
       }
     }
-    String msg;
-    serializeJson(arr, msg);
-    structTypenamespace::notifyString_t strObj = {arrObj.sendTo_name, msg};
-    ESP_LOGV("DEBUG", "%s", arrObj.sendTo_name.c_str());
+    structTypenamespace::notifyString_t strObj = {
+        .sendTo_name = arrObj.sendTo_name,
+        .msg = ""};
+    // ESP_LOGV("DEBUG", "%s", arrObj.sendTo_name.c_str());
+    serializeJson(arr, strObj.msg);
     sendEr(strObj);
     xSemaphoreGive(state.configLock);
   }
@@ -330,47 +334,66 @@ void espEvent_mcu(void)
   ESP_ERROR_CHECK(esp_event_handler_register(ETH_EVENT, ESP_EVENT_ANY_ID, esp_eg_on, (void *)__func__));
   ESP_ERROR_CHECK(esp_event_handler_register(SC_EVENT, ESP_EVENT_ANY_ID, esp_eg_on, (void *)__func__));
 }
-void serial_mcu_callback(void)
+void serial_mcu00_callback(void)
 {
   structTypenamespace::notifyString_t *obj = new structTypenamespace::notifyString_t{
-      .sendTo_name = get<0>(config.serial_mcu),
-      .msg = state.serial_mcu->readStringUntil('\n')};
-  ESP_LOGV("DEBUG", "%s", obj->sendTo_name.c_str());
+      .sendTo_name = get<0>(config.serial_mcu00),
+      .msg = state.serial_mcu00->readStringUntil('\n')};
+  // ESP_LOGV("DEBUG", "%s", obj->sendTo_name.c_str());
   xTaskNotify(state.parseStringTaskHandle, (uint32_t)obj, eSetValueWithOverwrite);
 }
 void setup(void)
 {
-  state.serial_mcu = &Serial;
-  state.serial_mcu->begin(115200);
+  state.macId = String(ESP.getEfuseMac());
+  state.packageId = "6227";
   state.eg_Handle = xEventGroupCreate();
   state.configLock = xSemaphoreCreateMutex();
+  state.serial_mcu00 = &Serial;
+  state.serial_mcu00->begin(115200);
+
   espEvent_mcu();
-  xTaskCreate(parseStringTask, "parseStringTask", 1024 * 20, NULL, state.taskindex++, &state.parseStringTaskHandle);
-  xTaskCreate(parsejsonArrayTask, "parsejsonArrayTask", 1024 * 20, NULL, state.taskindex++, &state.parsejsonArrayTaskHandle);
+
   state.configFs_mcu = new MyFs("/config.json");
   StaticJsonDocument<2000> doc;
-  JsonObject obj = doc.to<JsonObject>();
-  state.configFs_mcu->readFile(obj);
+  state.configFs_mcu->readFile(doc);
+  JsonObject obj = doc.as<JsonObject>();
   config_set(obj);
-  state.serial_mcu->begin(get<1>(config.serial_mcu));
-  state.serial_mcu->onReceive(serial_mcu_callback);
-  get<0>(config.const_mcu) = String(ESP.getEfuseMac());
-  // ESP_LOGV("DEBUG", "----");
-  // serializeJson(obj, *state.serial_mcu);
-  // ESP_LOGV("DEBUG", "----");
-  state.net_mcu = new MyNet(config.net_mcu);
+  // serializeJson(doc, *state.serial_mcu00);
+  state.serial_mcu00->begin(get<1>(config.serial_mcu00));
+  state.serial_mcu00->onReceive(serial_mcu00_callback);
+
+  xTaskCreate(parseStringTask, "parseStringTask", 1024 * 20, NULL, state.taskindex++, &state.parseStringTaskHandle);
+  xTaskCreate(parsejsonArrayTask, "parsejsonArrayTask", 1024 * 20, NULL, state.taskindex++, &state.parsejsonArrayTaskHandle);
+
+  structTypenamespace::notifyString_t *notify1 = new structTypenamespace::notifyString_t{
+      .sendTo_name = get<0>(config.log_mcu00),
+      .msg = "[\"config_get\"]"};
+  xTaskNotify(state.parseStringTaskHandle, (uint32_t)notify1, eSetValueWithOverwrite);
+  vTaskDelay(500);
+  delete notify1;
+  structTypenamespace::notifyString_t *notify2 = new structTypenamespace::notifyString_t{
+      .sendTo_name = get<0>(config.log_mcu00),
+      .msg = "[\"state_get\"]"};
+  xTaskNotify(state.parseStringTaskHandle, (uint32_t)notify2, eSetValueWithOverwrite);
+  vTaskDelay(500);
+  delete notify2;
+
+  state.net_mcu00 = new MyNet(config.net_mcu00);
+
   xEventGroupWaitBits(state.eg_Handle, EGBIG_MCU_NET, pdTRUE, pdTRUE, portMAX_DELAY);
-  state.ybl_mcuTaskParam = {
-      .config = &config.ybl_mcu,
+  state.ybl_mcu00TaskParam = {
+      .config = &config.ybl_mcu00,
       //  .sendTo_taskHandle = &state.parseStringTaskHandle
   };
-  xTaskCreate(a7129namespace::yblResTask, "ybl_mcuTask", 1024 * 6, (void *)&state.ybl_mcuTaskParam, state.taskindex++, NULL);
-  state.dz003_mcuTaskParam = {
-      .config = &config.dz003_mcu,
+  xTaskCreate(a7129namespace::yblResTask, "ybl_mcu00Task", 1024 * 6, (void *)&state.ybl_mcu00TaskParam, state.taskindex++, NULL);
+
+  state.dz003_mcu00TaskParam = {
+      .config = &config.dz003_mcu00,
       .sendTo_taskHandle = state.parseStringTaskHandle};
-  xTaskCreate(dz003namespace::resTask, "dz003_mcuTask", 1024 * 6, (void *)&state.dz003_mcuTaskParam, state.taskindex++, NULL);
-  vTaskStartScheduler();
-  ESP_LOGV("DEBUG", "=====================success===========================");
+  xTaskCreate(dz003namespace::resTask, "dz003_mcu00Task", 1024 * 6, (void *)&state.dz003_mcu00TaskParam, state.taskindex++, NULL);
+
+  ESP_LOGV("DEBUG", "=====================setup success===========================");
+  // vTaskStartScheduler();//Arduin内部已经启用
   vTaskDelete(NULL);
 }
 void loop(void)
@@ -381,10 +404,10 @@ void loop(void)
   // wsServer->cleanupClients(3);
   // String s = String(ESP.getEfuseMac(), HEX);
   StaticJsonDocument<2000> doc;
-  JsonObject obj = doc.to<JsonObject>();
+  JsonObject obj = doc.as<JsonObject>();
   config_get(obj);
-  serializeJson(doc, *state.serial_mcu);
   ESP_LOGV("DEBUG", "==");
+  serializeJson(doc, *state.serial_mcu00);
 
   vTaskDelay(3000);
 }

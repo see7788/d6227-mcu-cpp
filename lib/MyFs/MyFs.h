@@ -56,10 +56,20 @@ public:
         }
     }
 
+    void readFile(StaticJsonDocument<2000> &doc)
+    {
+        File dataFile = this->open(this->path);
+        DeserializationError error = deserializeJson(doc, dataFile);
+        dataFile.close();
+        if (error)
+        {
+            ESP_LOGE("ERROR", "%s", error.c_str());
+        }
+    }
     void readFile(JsonObject &obj)
     {
         File dataFile = this->open(this->path);
-        DynamicJsonDocument doc(1000);
+        StaticJsonDocument<2000> doc;
         DeserializationError error = deserializeJson(doc, dataFile);
         dataFile.close();
         if (error)

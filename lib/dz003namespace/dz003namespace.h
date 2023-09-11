@@ -192,12 +192,12 @@ namespace dz003namespace
       taskParam_t *c = (taskParam_t *)ptr;
       TickType_t ticksCount = xTaskGetTickCount();
       work_set(true);
-      int &v0v1abs = frequency.log[0];
-      v0v1abs = 0;
-      int &v0v1absLoop = frequency.log[1];
-      v0v1absLoop = 0;
-      int &loopNumber = frequency.log[2];
-      loopNumber = 0;
+      int &v0v1abs_log = frequency.log[0];
+      v0v1abs_log = 0;
+      int &v0v1absLoop_log = frequency.log[1];
+      v0v1absLoop_log = 0;
+      int &loopNumber_log = frequency.log[2];
+      loopNumber_log = 0;
       String sendTo;
       int v0v1abs_c, v0v1absLoop_c, loopNumber_c, set0tick_c;
       std::tie(sendTo, v0v1abs_c, v0v1absLoop_c, loopNumber_c, set0tick_c) = *(c->config);
@@ -205,10 +205,10 @@ namespace dz003namespace
       for (;;)
       {
          //ESP_LOGV("DEBUG","===");
-         loopNumber += 1;
-         v0v1abs = abs(frequency.value[0] - frequency.value[1]);
-         v0v1absLoop += v0v1abs;
-         if (v0v1abs > v0v1abs_c || v0v1absLoop > v0v1abs_c)
+         loopNumber_log += 1;
+         v0v1abs_log = abs(frequency.value[0] - frequency.value[1]);
+         v0v1absLoop_log += v0v1abs_log;
+         if (v0v1abs_log > v0v1abs_c || v0v1absLoop_log > v0v1abs_c)
          {
             work_set(false);
          }
@@ -217,10 +217,10 @@ namespace dz003namespace
           .msg = "[\"dz003.State\"]"};
          xTaskNotify(c->sendTo_taskHandle, (uint32_t)obj, eSetValueWithOverwrite);
          frequency_valueset0();
-         if (loopNumber > loopNumber_c)
+         if (loopNumber_log > loopNumber_c)
          {
-            loopNumber = 0;
-            v0v1absLoop = 0;
+            loopNumber_log = 0;
+            v0v1absLoop_log = 0;
          }
          vTaskDelayUntil(&ticksCount, pdMS_TO_TICKS(set0tick_c));
       }
