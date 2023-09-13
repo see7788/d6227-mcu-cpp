@@ -1,11 +1,15 @@
 import subprocess
 import os
 import json
-
-Import("env")
+Import("env", "projenv")
+# print(dir(projenv))
+# print(env)
+# for key, value in env.items():
+#     print(key, ":", value)
 try:
     mcuPath = env.get("PROJECT_DIR")
     srcFilePath = os.path.abspath(mcuPath+"/../d6227-mcu-ts/src/useStore.ts")
+    # saveFilePath = os.path.abspath(mcuPath+"/data/mcu00/config.json")
     saveFilePath = os.path.abspath(mcuPath+"/data/config.json")
     if os.path.exists(saveFilePath):
         os.remove(saveFilePath)
@@ -23,6 +27,18 @@ try:
             json.dump(mcu00, f)
     else:
         print("\nmcu00 undefind\n")
+    # osType = platform.system().lower()
+    # if osType == "darwin":
+    #     print("\nOS: MacOS\n")
+    #     env.Replace(MKSPIFFSTOOL=mcuPath + '/tools/mklittlefs')
+    # elif osType == "windows":
+    #     print("\nOS: Windows\n")
+    #     env.Replace(MKSPIFFSTOOL=mcuPath + '/tools/mklittlefs.exe')
+    # def uploadfsfiles_to_target(env,*args, **kwargs):
+    #     firmware_path = env.get("PROG_PATH")
+    #     print(firmware_path)
+    #     env.Execute("uploadfs")
+    # env.AddPreAction("upload", uploadfsfiles_to_target)
 except subprocess.CalledProcessError as e:
     print(e)
 finally:

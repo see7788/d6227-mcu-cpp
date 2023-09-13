@@ -640,7 +640,7 @@ namespace a7129namespace
     typedef struct
     {
         config_t *config;
-        // TaskHandle_t *sendTo_taskHandle;
+        TaskHandle_t *sendTo_taskHandle;
     } taskParam_t;
 
     int devMaxIndex = 0;
@@ -733,9 +733,9 @@ namespace a7129namespace
     }
     void yblResTask(void *ptr)
     {
-        taskParam_t *c = (taskParam_t *)ptr;
-        String sendTo = std::get<0>(*(c->config));
-        useIds = &std::get<1>(*(c->config));
+        taskParam_t c = *(taskParam_t *)ptr;
+        String sendTo = std::get<0>(*c.config);
+        useIds = &std::get<1>(*c.config);
         send_state = 1;
         InitRF(); // init RF,最后一个字段0x8E,0x12,0x86
         delayMicroseconds(300);
@@ -759,7 +759,7 @@ namespace a7129namespace
                 structTypenamespace::notifyString_t *obj = new structTypenamespace::notifyString_t{
                     .sendTo_name = sendTo,
                     .msg = "[\"ybl.State\"]"};
-                // xTaskNotify(c->sendTo_taskHandle, (uint32_t)obj, eSetValueWithOverwrite);
+                xTaskNotify(*c.sendTo_taskHandle, (uint32_t)obj, eSetValueWithOverwrite);
                 interrupt_state = 0;
             }
             // yblSend(dev[0]);

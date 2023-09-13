@@ -1,9 +1,9 @@
 #ifndef MyFs_h
 #define MyFs_h
-#include <SPIFFS.h>
+#include <LittleFS.h>
 #include <ArduinoJson.h>
 #include <esp_log.h>
-class MyFs : public fs::SPIFFSFS
+class MyFs : public fs::LittleFSFS
 {
 private:
     const char *path;
