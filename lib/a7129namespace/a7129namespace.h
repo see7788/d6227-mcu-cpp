@@ -633,16 +633,10 @@ namespace a7129namespace
         state_t state;
     } idState_t;
     idState_t dev[20];
-    typedef id_t useIds_t[20];
-    useIds_t *useIds;
+    typedef std::vector<id_t> useIds_t;
+    useIds_t useIds;
     // sendTo_name,id白名单
     typedef std::tuple<String, useIds_t> config_t;
-    typedef struct
-    {
-        config_t *config;
-        TaskHandle_t *sendTo_taskHandle;
-    } taskParam_t;
-
     int devMaxIndex = 0;
     void yblInterrupt(void)
     {
@@ -662,21 +656,14 @@ namespace a7129namespace
                 state_t state_vale = A7129_RX_BUFF[2];
                 type_t type_vale = (A7129_RX_BUFF[5] >> 6) + 1;
             }
-
-            // for(char i=0;i<sizeof(dev) / sizeof(dev[0]);i++)
-            // if(A7129_RX_BUFF[0]==dev[i].id>>24&&id_vale-dev[i].id>0&&interrupt_state==1) return ;
-
-            // Serial.print(A7129_RX_BUFF[0]);Serial.print(" ");
-            // Serial.print(A7129_RX_BUFF[1]);Serial.print(" ");
-            // Serial.print(A7129_RX_BUFF[5]);Serial.print(" ");
-            // Serial.println(" ");
-
-            if ((*useIds)[0] != 0)
+            std::size_t usel = useIds.size();
+            if (usel>0)
             {
-                for (char i = 0; i < sizeof(*useIds) / sizeof((*useIds)[0]); i++)
+                // for (char i = 0; i < sizeof(*useIds) / sizeof((*useIds)[0]); i++)
+                for (char i = 0; i < usel; i++)
                 {
 
-                    if (id_vale == (*useIds)[i])
+                    if (id_vale == useIds[i])
                     {
                         interrupt_state = 1;
                         dev[i].id = id_vale;
@@ -731,11 +718,16 @@ namespace a7129namespace
         StrobeCMD(CMD_RX); // 设为接收模式
         send_state = 1;
     }
+    typedef struct
+    {
+        config_t &config;
+        TaskHandle_t &xTaskNotifyWait_taskHandle;
+    } taskParam_t;
     void yblResTask(void *ptr)
     {
-        taskParam_t c = *(taskParam_t *)ptr;
-        String sendTo = std::get<0>(*c.config);
-        useIds = &std::get<1>(*c.config);
+        taskParam_t *c = (taskParam_t *)ptr;
+        String sendTo; 
+        std::tie(sendTo, useIds) = c->config;
         send_state = 1;
         InitRF(); // init RF,最后一个字段0x8E,0x12,0x86
         delayMicroseconds(300);
@@ -759,7 +751,7 @@ namespace a7129namespace
                 structTypenamespace::notifyString_t *obj = new structTypenamespace::notifyString_t{
                     .sendTo_name = sendTo,
                     .msg = "[\"ybl.State\"]"};
-                xTaskNotify(*c.sendTo_taskHandle, (uint32_t)obj, eSetValueWithOverwrite);
+                xTaskNotify(c->xTaskNotifyWait_taskHandle, (uint32_t)obj, eSetValueWithOverwrite);
                 interrupt_state = 0;
             }
             // yblSend(dev[0]);

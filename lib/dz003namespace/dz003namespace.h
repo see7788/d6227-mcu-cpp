@@ -184,12 +184,12 @@ namespace dz003namespace
    typedef std::tuple<String, int, int, int, int> config_t; // sendTo_name,v0v1abs_c，v0v1absLoop_c，loopNumber_c，set0tick_c
    typedef struct
    {
-      config_t config;
-      TaskHandle_t sendTo_taskHandle;
+      config_t &config;
+      TaskHandle_t &xTaskNotifyWait_taskHandle;
    } taskParam_t;
    void resTask(void *ptr)
    {
-      taskParam_t c = *(taskParam_t *)ptr;
+      taskParam_t *c = (taskParam_t *)ptr;
       TickType_t ticksCount = xTaskGetTickCount();
       work_set(true);
       int &v0v1abs_log = frequency.log[0];
@@ -200,11 +200,10 @@ namespace dz003namespace
       loopNumber_log = 0;
       String sendTo;
       int v0v1abs_c, v0v1absLoop_c, loopNumber_c, set0tick_c;
-      std::tie(sendTo, v0v1abs_c, v0v1absLoop_c, loopNumber_c, set0tick_c) = c.config;
+      std::tie(sendTo, v0v1abs_c, v0v1absLoop_c, loopNumber_c, set0tick_c) = c->config;
       ESP_LOGV("DEBUG", "SUCCESS");
-      for (;;)
+      while (1)
       {
-         // ESP_LOGV("DEBUG","===");
          loopNumber_log += 1;
          v0v1abs_log = abs(frequency.value[0] - frequency.value[1]);
          v0v1absLoop_log += v0v1abs_log;
@@ -215,7 +214,7 @@ namespace dz003namespace
          structTypenamespace::notifyString_t *obj = new structTypenamespace::notifyString_t{
              .sendTo_name = sendTo,
              .msg = "[\"dz003.State\"]"};
-         xTaskNotify(c.sendTo_taskHandle, (uint32_t)obj, eSetValueWithOverwrite);
+         xTaskNotify(c->xTaskNotifyWait_taskHandle, (uint32_t)obj, eSetValueWithOverwrite);
          frequency_valueset0();
          if (loopNumber_log > loopNumber_c)
          {

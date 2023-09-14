@@ -39,8 +39,6 @@ struct config_t
 struct state_t
 {
   int taskindex;
-  dz003namespace::taskParam_t mcu00_dz003TaskParam;
-  a7129namespace::taskParam_t mcu00_yblTaskParam;
   EventGroupHandle_t eg_Handle;
   SemaphoreHandle_t configLock;
   TaskHandle_t parseStringTaskHandle;
@@ -51,6 +49,8 @@ struct state_t
   MyFs *mcu00_configFs;
   MyNet *mcu00_net;
   HardwareSerial *mcu00_serial;
+  dz003namespace::taskParam_t *mcu00_dz003TaskParam;
+  a7129namespace::taskParam_t *mcu00_yblTaskParam;
 } state;
 void esp_eg_on(void *registEr, esp_event_base_t postEr, int32_t eventId, void *eventData)
 {
@@ -146,6 +146,18 @@ void config_get(JsonObject &obj)
   muc_net_sta.add(get<0>(config.mcu00_net.sta));
   muc_net_sta.add(get<1>(config.mcu00_net.sta));
 }
+void sendLog(String &jsonstr)
+{
+  String sendTo = get<0>(config.mcu00_log);
+  if (sendTo == "mcu00_serial")
+  {
+    state.mcu00_serial->println(jsonstr);
+  }
+  else
+  {
+    state.mcu00_serial->println("[\"sendTo_name undefind\"]");
+  }
+}
 void sendEr(structTypenamespace::notifyString_t &strObj)
 {
   // ESP_LOGV("DEBUG", "%s", strObj.sendTo_name.c_str());
@@ -155,16 +167,10 @@ void sendEr(structTypenamespace::notifyString_t &strObj)
   }
   else
   {
-    state.mcu00_serial->println("[\"sendTo_name undefind\"]");
+    String msg = "[\"sendTo_name undefind\"]";
+    sendLog(msg);
   }
   xEventGroupSetBits(state.eg_Handle, EGBIG_parseSend);
-}
-void sendLog(String &str)
-{
-  structTypenamespace::notifyString_t obj = {
-      .sendTo_name = get<0>(config.mcu00_log),
-      .msg = str};
-  sendEr(obj);
 }
 void parseJsonArray(structTypenamespace::notifyJsonArray_t &arrObj)
 {
@@ -241,7 +247,7 @@ void parseJsonArray(structTypenamespace::notifyJsonArray_t &arrObj)
         arr.clear();
         arr[0].set("state_set");
         JsonObject obj = arr.createNestedObject();
-        JsonObject data = obj.createNestedObject("mcu00_dz003");
+        JsonObject data = obj.createNestedObject("mcu00_dz003_state");
         dz003namespace::state(data);
       };
       if (api == "dz003.State")
@@ -308,8 +314,8 @@ void parseStringTask(void *nullparam)
       ESP_LOGV("DEBUG", "%s", obj.sendTo_name.c_str());
       if (error)
       {
-        obj.msg = "[\"json pase error\",\"" + String(error.c_str()) + "\",\"" + obj.msg + "\"]";
-        sendEr(obj);
+        String msg="[\"json pase error\",\"" + String(error.c_str()) + "\",\"" + obj.msg + "\"]";
+        sendLog(msg);
       }
       else
       {
@@ -349,46 +355,46 @@ void setup(void)
   ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, ESP_EVENT_ANY_ID, esp_eg_on, (void *)__func__));
   ESP_ERROR_CHECK(esp_event_handler_register(ETH_EVENT, ESP_EVENT_ANY_ID, esp_eg_on, (void *)__func__));
   ESP_ERROR_CHECK(esp_event_handler_register(SC_EVENT, ESP_EVENT_ANY_ID, esp_eg_on, (void *)__func__));
-  ESP_LOGV("DEBUG", "=====================esp_event_handler_register success===========================");
+  ESP_LOGV("DEBUG", "=======esp_event_handler_register success=========");
 
   state.mcu00_configFs = new MyFs("/config.json");
   StaticJsonDocument<2000> doc;
   state.mcu00_configFs->readFile(doc);
   JsonObject obj = doc.as<JsonObject>();
   config_set(obj);
-  ESP_LOGV("DEBUG", "=====================mcu00_configFs success===========================");
+  ESP_LOGV("DEBUG", "========mcu00_configFs");
   serializeJson(doc, *state.mcu00_serial);
   state.mcu00_serial->begin(get<1>(config.mcu00_serial));
   state.mcu00_serial->onReceive(mcu00_serial_callback);
-  ESP_LOGV("DEBUG", "=====================mcu00_serial success===========================");
+  ESP_LOGV("DEBUG", "=========mcu00_serial");
 
   xTaskCreate(parseStringTask, "parseStringTask", 1024 * 20, NULL, state.taskindex++, &state.parseStringTaskHandle);
   xTaskCreate(parsejsonArrayTask, "parsejsonArrayTask", 1024 * 20, NULL, state.taskindex++, &state.parsejsonArrayTaskHandle);
-  ESP_LOGV("DEBUG", "=====================parseTask success===========================");
+  ESP_LOGV("DEBUG", "============parseTask");
   state.mcu00_net = new MyNet(config.mcu00_net);
   xEventGroupWaitBits(state.eg_Handle, EGBIG_MCU_NET, pdTRUE, pdTRUE, portMAX_DELAY);
-  structTypenamespace::notifyString_t *notify1 = new structTypenamespace::notifyString_t{
-      .sendTo_name = get<0>(config.mcu00_log),
-      .msg = "[\"config_get\"]"};
-  xTaskNotify(state.parseStringTaskHandle, (uint32_t)notify1, eSetValueWithOverwrite);
-  xEventGroupWaitBits(state.eg_Handle, EGBIG_parseSend, pdFALSE, pdTRUE, portMAX_DELAY);
-  structTypenamespace::notifyString_t *notify2 = new structTypenamespace::notifyString_t{
-      .sendTo_name = get<0>(config.mcu00_log),
-      .msg = "[\"state_get\"]"};
-  xTaskNotify(state.parseStringTaskHandle, (uint32_t)notify2, eSetValueWithOverwrite);
-  xEventGroupWaitBits(state.eg_Handle, EGBIG_parseSend, pdFALSE, pdTRUE, portMAX_DELAY);
+  // structTypenamespace::notifyString_t *notify1 = new structTypenamespace::notifyString_t{
+  //     .sendTo_name = get<0>(config.mcu00_log),
+  //     .msg = "[\"config_get\"]"};
+  // xTaskNotify(state.parseStringTaskHandle, (uint32_t)notify1, eSetValueWithOverwrite);
+  // xEventGroupWaitBits(state.eg_Handle, EGBIG_parseSend, pdFALSE, pdTRUE, portMAX_DELAY);
+  // structTypenamespace::notifyString_t *notify2 = new structTypenamespace::notifyString_t{
+  //     .sendTo_name = get<0>(config.mcu00_log),
+  //     .msg = "[\"state_get\"]"};
+  // xTaskNotify(state.parseStringTaskHandle, (uint32_t)notify2, eSetValueWithOverwrite);
+  // xEventGroupWaitBits(state.eg_Handle, EGBIG_parseSend, pdFALSE, pdTRUE, portMAX_DELAY);
+  // ESP_LOGV("DEBUG", "==============init_get");
+  state.mcu00_yblTaskParam = new a7129namespace::taskParam_t{
+      .config = config.mcu00_ybl,
+      .xTaskNotifyWait_taskHandle = state.parseStringTaskHandle};
+  xTaskCreate(a7129namespace::yblResTask, "mcu00_yblTask", 1024 * 6, (void *)state.mcu00_yblTaskParam, state.taskindex++, NULL);
 
-  state.mcu00_yblTaskParam = {
-      .config = &config.mcu00_ybl,
-      .sendTo_taskHandle = &state.parseStringTaskHandle};
-  xTaskCreate(a7129namespace::yblResTask, "mcu00_yblTask", 1024 * 6, (void *)&state.mcu00_yblTaskParam, state.taskindex++, NULL);
-
-  state.mcu00_dz003TaskParam = {
+  state.mcu00_dz003TaskParam = new dz003namespace::taskParam_t{
       .config = config.mcu00_dz003,
-      .sendTo_taskHandle = state.parseStringTaskHandle};
-  xTaskCreate(dz003namespace::resTask, "mcu00_dz003Task", 1024 * 6, (void *)&state.mcu00_dz003TaskParam, state.taskindex++, NULL);
+      .xTaskNotifyWait_taskHandle = state.parseStringTaskHandle};
+  xTaskCreate(dz003namespace::resTask, "mcu00_dz003Task", 1024 * 6, (void *)state.mcu00_dz003TaskParam, state.taskindex++, NULL);
 
-  ESP_LOGV("DEBUG", "=====================setup success===========================");
+  ESP_LOGV("DEBUG", "=========setup success");
   // vTaskStartScheduler();//Arduin内部已经启用
   vTaskDelete(NULL);
 }
