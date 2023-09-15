@@ -4,6 +4,7 @@
 #include <tuple>
 #include <vector>
 #include <unordered_map>
+#include <freertos/queue.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <structTypenamespace.h>
@@ -657,7 +658,7 @@ namespace a7129namespace
                 type_t type_vale = (A7129_RX_BUFF[5] >> 6) + 1;
             }
             std::size_t usel = useIds.size();
-            if (usel>0)
+            if (usel > 0)
             {
                 // for (char i = 0; i < sizeof(*useIds) / sizeof((*useIds)[0]); i++)
                 for (char i = 0; i < usel; i++)
@@ -721,12 +722,13 @@ namespace a7129namespace
     typedef struct
     {
         config_t &config;
-        TaskHandle_t &xTaskNotifyWait_taskHandle;
+        // TaskHandle_t &notifyWait_taskHandle;
+        QueueHandle_t &stringQueueHandle;
     } taskParam_t;
     void yblResTask(void *ptr)
     {
         taskParam_t *c = (taskParam_t *)ptr;
-        String sendTo; 
+        String sendTo;
         std::tie(sendTo, useIds) = c->config;
         send_state = 1;
         InitRF(); // init RF,最后一个字段0x8E,0x12,0x86
@@ -748,10 +750,14 @@ namespace a7129namespace
                         ESP_LOGV("DEBUG", "id=%lld, type=%u, state=%u", dev[i].id, dev[i].type, dev[i].state);
                     }
                 }
-                structTypenamespace::notifyString_t *obj = new structTypenamespace::notifyString_t{
+                structTypenamespace::myString_t obj ={
                     .sendTo_name = sendTo,
                     .msg = "[\"ybl.State\"]"};
-                xTaskNotify(c->xTaskNotifyWait_taskHandle, (uint32_t)obj, eSetValueWithOverwrite);
+                // xTaskNotify(c->notifyWait_taskHandle, (uint32_t)obj, eSetValueWithOverwrite);
+                if (xQueueSend(c->stringQueueHandle, &obj, 500) != pdPASS)
+                {
+                    ESP_LOGV("DEBUG", "Queue is full");
+                }
                 interrupt_state = 0;
             }
             // yblSend(dev[0]);

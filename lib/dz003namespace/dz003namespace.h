@@ -6,6 +6,7 @@
 #include <ArduinoJson.h>
 #include <esp_log.h>
 #include <tuple>
+#include <freertos/queue.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <structTypenamespace.h>
@@ -185,7 +186,8 @@ namespace dz003namespace
    typedef struct
    {
       config_t &config;
-      TaskHandle_t &xTaskNotifyWait_taskHandle;
+      // TaskHandle_t &notifyWait_taskHandle;
+      QueueHandle_t &stringQueueHandle;
    } taskParam_t;
    void resTask(void *ptr)
    {
@@ -211,10 +213,14 @@ namespace dz003namespace
          {
             work_set(false);
          }
-         structTypenamespace::notifyString_t *obj = new structTypenamespace::notifyString_t{
+         structTypenamespace::myString_t obj = {
              .sendTo_name = sendTo,
              .msg = "[\"dz003.State\"]"};
-         xTaskNotify(c->xTaskNotifyWait_taskHandle, (uint32_t)obj, eSetValueWithOverwrite);
+         // xTaskNotify(c->notifyWait_taskHandle, (uint32_t)obj, eSetValueWithOverwrite);
+         if (xQueueSend(c->stringQueueHandle, &obj, 500) != pdPASS)
+         {
+            ESP_LOGV("DEBUG", "Queue is full");
+         }
          frequency_valueset0();
          if (loopNumber_log > loopNumber_c)
          {
