@@ -161,23 +161,12 @@ void sendLog(String &jsonstr)
     state.mcu00_serial->println("[\"sendTo_name undefind\"]");
   }
 }
-void sendEr(structTypenamespace::myString_t &strObj)
-{
-  // ESP_LOGV("DEBUG", "%s", strObj.sendTo_name.c_str());
-  if (strObj.sendTo_name == "mcu00_serial")
-  {
-    state.mcu00_serial->println(strObj.msg);
-  }
-  else
-  {
-    String msg = "[\"sendTo_name undefind\"]";
-    sendLog(msg);
-  }
-}
 void parseJsonArray(structTypenamespace::myJsonArray_t &arrObj)
 {
   if (xSemaphoreTake(state.configLock, portMAX_DELAY) == pdTRUE)
   {
+    String msg;
+    String sendTo_name = arrObj.sendTo_name;
     JsonArray arr = arrObj.msg;
     String api = arr[0].as<String>();
     // ESP_LOGV("DEBUG", "parseJsonArray:%s", api.c_str());
@@ -281,12 +270,16 @@ void parseJsonArray(structTypenamespace::myJsonArray_t &arrObj)
         arr[0].set("mcu pass");
       }
     }
-    structTypenamespace::myString_t strObj = {
-        .sendTo_name = arrObj.sendTo_name,
-        .msg = ""};
-    // ESP_LOGV("DEBUG", "%s", arrObj.sendTo_name.c_str());
-    serializeJson(arr, strObj.msg);
-    sendEr(strObj);
+    serializeJson(arr, msg);
+    if (sendTo_name == "mcu00_serial")
+    {
+      state.mcu00_serial->println(msg);
+    }
+    else
+    {
+      msg = "[\"parseJsonArray sendTo_name undefind\"]";
+      sendLog(msg);
+    }
     xSemaphoreGive(state.configLock);
   }
 }
@@ -319,7 +312,7 @@ void parseStringTask(void *nullparam)
       DeserializationError error = deserializeJson(doc, obj.msg);
       if (error)
       {
-        String msg = "[\"json pase error\",\"" + String(error.c_str()) + "\",\"" + obj.msg + "\"]";
+        String msg = "[\"parseStringTask error\",\"" + String(error.c_str()) + "\",\"" + obj.msg + "\"]";
         sendLog(msg);
       }
       else
