@@ -161,6 +161,14 @@ void sendLog(String &jsonstr)
     state.mcu00_serial->println("[\"sendTo_name undefind\"]");
   }
 }
+void dz003_state_get(JsonArray &arr)
+{
+  arr.clear();
+  arr[0].set("state_set");
+  JsonObject obj = arr.createNestedObject();
+  JsonObject data = obj.createNestedObject("mcu00_dz003State");
+  dz003namespace::state(data);
+};
 void parseJsonArray(structTypenamespace::myJsonArray_t &arrObj)
 {
   if (xSemaphoreTake(state.configLock, portMAX_DELAY) == pdTRUE)
@@ -212,7 +220,7 @@ void parseJsonArray(structTypenamespace::myJsonArray_t &arrObj)
       arr.clear();
       arr.add("state_set");
       JsonObject obj = arr.createNestedObject();
-      JsonObject data = obj.createNestedObject("mcu00");
+      JsonObject data = obj.createNestedObject("mcu00_mcuState");
       JsonObject egBit = data.createNestedObject("egBit");
       for (int i = sizeof(ulBits) * 8 - 1; i >= 0; i--)
       { // 循环输出每个二进制位
@@ -233,37 +241,29 @@ void parseJsonArray(structTypenamespace::myJsonArray_t &arrObj)
     }
     else
     {
-      auto getdz003State = [&arr]()
-      {
-        arr.clear();
-        arr[0].set("state_set");
-        JsonObject obj = arr.createNestedObject();
-        JsonObject data = obj.createNestedObject("mcu00_dz003_state");
-        dz003namespace::state(data);
-      };
       if (api == "dz003.State")
       {
-        getdz003State();
+        dz003_state_get(arr);
       }
       else if (api == "dz003.fa_set")
       {
         dz003namespace::fa_set(arr[1].as<bool>());
-        getdz003State();
+        dz003_state_get(arr);
       }
       else if (api == "dz003.frequency_set")
       {
         dz003namespace::frequency_set(arr[1].as<bool>());
-        getdz003State();
+        dz003_state_get(arr);
       }
       else if (api == "dz003.laba_set")
       {
         dz003namespace::laba_set(arr[1].as<bool>());
-        getdz003State();
+        dz003_state_get(arr);
       }
       else if (api == "dz003.deng_set")
       {
         dz003namespace::deng_set(arr[1].as<bool>());
-        getdz003State();
+        dz003_state_get(arr);
       }
       else
       {
