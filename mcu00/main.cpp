@@ -29,11 +29,10 @@
 #include <MyIpc.h>
 #define EGBIG_MCU_NET (1 << 0)
 // #define EGBIG_parseSend (1 << 1)
-using namespace std;
 struct config_t
 {
-  tuple<String, int> mcu00_serial;
-  tuple<String> mcu00_log;
+  std::tuple<String, int> mcu00_serial;
+  std::tuple<String> mcu00_log;
   MyNet::config_t mcu00_net;
   dz003namespace::config_t mcu00_dz003;
   a7129namespace::config_t mcu00_ybl;
@@ -98,10 +97,16 @@ void config_set(JsonObject &obj)
   }
   if (obj.containsKey("mcu00_net"))
   {
-    JsonObject mcu00_net = obj["mcu00_net"].as<JsonObject>();
-    config.mcu00_net.use = mcu00_net["use"].as<String>();
-    config.mcu00_net.ap = std::make_tuple(mcu00_net["ap"][0].as<String>());
-    config.mcu00_net.sta = std::make_tuple(mcu00_net["sta"][0].as<String>(), mcu00_net["sta"][1].as<String>());
+    MyNet::type_t uset;
+    MyNet::ap_t ap;
+    MyNet::sta_t sta;
+    std::tie(uset, ap, sta) = config.mcu00_net;
+    JsonArray mcu00_net = obj["mcu00_net"].as<JsonArray>();
+    uset = mcu00_net[0].as<String>();
+    JsonArray mcu00_net_ap = mcu00_net[1].as<JsonArray>();
+    ap = std::make_tuple(mcu00_net_ap[0].as<String>());
+    JsonArray mcu00_net_sta = mcu00_net[2].as<JsonArray>();
+    sta = std::make_tuple(mcu00_net_sta[0].as<String>(), mcu00_net_sta[1].as<String>());
   }
   if (obj.containsKey("mcu00_dz003"))
   {
@@ -111,28 +116,28 @@ void config_set(JsonObject &obj)
   if (obj.containsKey("mcu00_ybl"))
   {
     JsonArray mcu00_ybl = obj["mcu00_ybl"].as<JsonArray>();
-    get<0>(config.mcu00_ybl) = mcu00_ybl[0].as<String>();
+    std::get<0>(config.mcu00_ybl) = mcu00_ybl[0].as<String>();
     JsonArray mcu00_ybluseIds = mcu00_ybl[1].as<JsonArray>();
     for (int i = 0; i < mcu00_ybluseIds.size(); ++i)
     {
-      get<1>(config.mcu00_ybl)[i] = mcu00_ybluseIds[i].as<a7129namespace::id_t>();
+      std::get<1>(config.mcu00_ybl)[i] = mcu00_ybluseIds[i].as<a7129namespace::id_t>();
     }
   }
 }
 void config_get(JsonObject &obj)
 {
   JsonArray mcu00_log = obj.createNestedArray("mcu00_log");
-  mcu00_log.add(get<0>(config.mcu00_log));
+  mcu00_log.add(std::get<0>(config.mcu00_log));
   JsonArray mcu00_serial = obj.createNestedArray("mcu00_serial");
-  mcu00_serial.add(get<0>(config.mcu00_serial));
-  mcu00_serial.add(get<1>(config.mcu00_serial));
+  mcu00_serial.add(std::get<0>(config.mcu00_serial));
+  mcu00_serial.add(std::get<1>(config.mcu00_serial));
   // mcu00_net
   JsonArray mcu00_dz003 = obj.createNestedArray("mcu00_dz003");
-  mcu00_dz003.add(get<0>(config.mcu00_dz003));
-  mcu00_dz003.add(get<1>(config.mcu00_dz003));
-  mcu00_dz003.add(get<2>(config.mcu00_dz003));
-  mcu00_dz003.add(get<3>(config.mcu00_dz003));
-  mcu00_dz003.add(get<4>(config.mcu00_dz003));
+  mcu00_dz003.add(std::get<0>(config.mcu00_dz003));
+  mcu00_dz003.add(std::get<1>(config.mcu00_dz003));
+  mcu00_dz003.add(std::get<2>(config.mcu00_dz003));
+  mcu00_dz003.add(std::get<3>(config.mcu00_dz003));
+  mcu00_dz003.add(std::get<4>(config.mcu00_dz003));
   JsonArray mcu00_ybl = obj.createNestedArray("mcu00_ybl");
   mcu00_ybl.add(std::get<0>(config.mcu00_ybl));
   JsonArray mcu00_ybluseIds = mcu00_ybl.createNestedArray();
@@ -141,17 +146,21 @@ void config_get(JsonObject &obj)
     if (element)
       mcu00_ybluseIds.add(element);
   }
-  JsonObject mcu00_net = obj.createNestedObject("mcu00_net");
-  mcu00_net["use"] = config.mcu00_net.use;
-  JsonArray muc_net_ap = mcu00_net.createNestedArray("ap");
-  muc_net_ap.add(get<0>(config.mcu00_net.ap));
-  JsonArray muc_net_sta = mcu00_net.createNestedArray("sta");
-  muc_net_sta.add(get<0>(config.mcu00_net.sta));
-  muc_net_sta.add(get<1>(config.mcu00_net.sta));
+  JsonArray mcu00_net = obj.createNestedArray("mcu00_net");
+  MyNet::type_t uset;
+  MyNet::ap_t ap;
+  MyNet::sta_t sta;
+  std::tie(uset, ap, sta) = config.mcu00_net;
+  mcu00_net.add(uset);
+  JsonArray muc_net_ap = mcu00_net.createNestedArray();
+  muc_net_ap.add(std::get<0>(ap));
+  JsonArray muc_net_sta = mcu00_net.createNestedArray();
+  muc_net_sta.add(std::get<0>(sta));
+  muc_net_sta.add(std::get<1>(sta));
 }
 void sendLog(String &jsonstr)
 {
-  String sendTo = get<0>(config.mcu00_log);
+  String sendTo = std::get<0>(config.mcu00_log);
   if (sendTo == "mcu00_serial")
   {
     state.mcu00_serial->println(jsonstr);
@@ -329,7 +338,7 @@ void parseStringTask(void *nullparam)
 void mcu00_serial_callback(void)
 {
   structTypenamespace::myString_t *obj = new structTypenamespace::myString_t{
-      .sendTo_name = get<0>(config.mcu00_serial),
+      .sendTo_name = std::get<0>(config.mcu00_serial),
       .msg = state.mcu00_serial->readStringUntil('\n')};
   // ESP_LOGV("DEBUG", "%s", obj->sendTo_name.c_str());
   // xTaskNotify(state.parseStringTaskHandle, (uint32_t)obj, eSetValueWithOverwrite);
@@ -368,7 +377,7 @@ void setup(void)
   config_set(obj);
   ESP_LOGV("DEBUG", "========mcu00_configFs");
   serializeJson(doc, *state.mcu00_serial);
-  state.mcu00_serial->begin(get<1>(config.mcu00_serial));
+  state.mcu00_serial->begin(std::get<1>(config.mcu00_serial));
   state.mcu00_serial->onReceive(mcu00_serial_callback);
   ESP_LOGV("DEBUG", "=========mcu00_serial");
 
@@ -378,11 +387,11 @@ void setup(void)
   state.mcu00_net = new MyNet(config.mcu00_net);
   xEventGroupWaitBits(state.eg_Handle, EGBIG_MCU_NET, pdTRUE, pdTRUE, portMAX_DELAY);
   structTypenamespace::myString_t notify1 = {
-      .sendTo_name = get<0>(config.mcu00_log),
+      .sendTo_name = std::get<0>(config.mcu00_log),
       .msg = "[\"config_get\"]"};
   xQueueSend(state.stringQueueHandle, &notify1, eSetValueWithOverwrite);
   structTypenamespace::myString_t notify2 = {
-      .sendTo_name = get<0>(config.mcu00_log),
+      .sendTo_name = std::get<0>(config.mcu00_log),
       .msg = "[\"state_get\"]"};
   xQueueSend(state.stringQueueHandle, &notify2, eSetValueWithOverwrite);
   // ESP_LOGV("DEBUG", "==============init_get");

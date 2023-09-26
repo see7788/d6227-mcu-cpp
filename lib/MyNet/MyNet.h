@@ -6,44 +6,45 @@
 class MyNet
 {
 public:
-    typedef struct
+    typedef String type_t;//""| "ap" | "sta" | "eth" | "ap+sta" | "ap+eth"
+    typedef std::tuple<String> ap_t;
+    typedef std::tuple<String, String> sta_t;
+    typedef std::tuple<String, ap_t, sta_t> config_t;
+    MyNet(config_t &config)
     {
-        String use;
-        std::tuple<String> ap;
-        std::tuple<String, String> sta;
-    } config_t;
-    MyNet(config_t &param)
-    {
-        String c = param.use;
-        if (c == "ap")
+        type_t uset;
+        ap_t ap;
+        sta_t sta;
+        std::tie(uset, ap, sta) = config;
+        if (uset == "ap")
         {
             WiFi.mode(WIFI_AP);
-            WiFi.softAP(std::get<0>(param.ap).c_str());
+            WiFi.softAP(std::get<0>(ap).c_str());
         }
-        else if (c == "sta")
+        else if (uset == "sta")
         {
             WiFi.mode(WIFI_STA);
-            WiFi.begin(std::get<0>(param.sta).c_str(), std::get<1>(param.sta).c_str());
+            WiFi.begin(std::get<0>(sta).c_str(), std::get<1>(sta).c_str());
         }
-        else if (c == "eth")
+        else if (uset == "eth")
         {
             dz003namespace::eth_begin();
         }
-        else if (c == "ap+sta")
+        else if (uset == "ap+sta")
         {
             WiFi.mode(WIFI_AP_STA);
-            WiFi.softAP(std::get<0>(param.ap).c_str());
-            WiFi.begin(std::get<0>(param.sta).c_str(), std::get<1>(param.sta).c_str());
+            WiFi.softAP(std::get<0>(ap).c_str());
+            WiFi.begin(std::get<0>(sta).c_str(), std::get<1>(sta).c_str());
         }
-        else if (c == "ap+eth")
+        else if (uset == "ap+eth")
         {
             WiFi.mode(WIFI_AP);
-            WiFi.softAP(std::get<0>(param.ap).c_str());
+            WiFi.softAP(std::get<0>(ap).c_str());
             dz003namespace::eth_begin();
         }
         else
         {
-            ESP_LOGV("debug", "init false");
+            ESP_LOGV("debug", "init false %s",uset.c_str());
         }
     }
 };
