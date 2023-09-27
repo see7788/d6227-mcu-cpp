@@ -1,1 +1,1 @@
-{"mcu00_log": ["mcu00_serial"], "mcu00_serial": ["mcu00_serial", 115200], "mcu00_net": ["eth", ["apname"], ["shuzijia", "80508833"]], "mcu00_dz003": ["mcu00_serial", 1000, 1000, 1000, 5000], "mcu00_ybl": ["mcu00_serial"]}
+{"mcu00_log": ["mcu00_serial"], "mcu00_serial": ["mcu00_serial", 115200], "mcu00_net": ["eth", ["apname"], ["shuzijia", "80508833"]], "mcu00_dz003": ["mcu00_serial", 1000, 1000, 1000, 5000], "mcu00_ybl": ["mcu00_serial", []]}

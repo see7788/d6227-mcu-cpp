@@ -44,7 +44,7 @@ public:
         }
         else
         {
-            ESP_LOGV("debug", "init false %s",uset.c_str());
+            ESP_LOGV("debug", "init bug %s",uset.c_str());
         }
     }
 };
