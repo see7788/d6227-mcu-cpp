@@ -186,8 +186,7 @@ namespace dz003namespace
    typedef struct
    {
       config_t &config;
-      // TaskHandle_t &notifyWait_taskHandle;
-      QueueHandle_t &stringQueueHandle;
+      QueueHandle_t &parseStringQueueHandle;
    } taskParam_t;
    void resTask(void *ptr)
    {
@@ -216,8 +215,7 @@ namespace dz003namespace
          structTypenamespace::myString_t obj = {
              .sendTo_name = sendTo,
              .msg = "[\"dz003.State\"]"};
-         // xTaskNotify(c->notifyWait_taskHandle, (uint32_t)obj, eSetValueWithOverwrite);
-         if (xQueueSend(c->stringQueueHandle, &obj, 500) != pdPASS)
+         if (xQueueSend(c->parseStringQueueHandle, &obj, 500) != pdPASS)
          {
             ESP_LOGV("DEBUG", "Queue is full");
          }

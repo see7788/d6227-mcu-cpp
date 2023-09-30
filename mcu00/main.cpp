@@ -42,7 +42,8 @@ struct state_t
   int taskindex;
   EventGroupHandle_t eg_Handle;
   SemaphoreHandle_t configLock;
-  QueueHandle_t stringQueueHandle;
+  QueueHandle_t parseStringQueueHandle;
+  QueueHandle_t parsejsonArrayQueueHandle;
   TaskHandle_t parseStringTaskHandle;
   TaskHandle_t parsejsonArrayTaskHandle;
   String locIp;
@@ -224,7 +225,7 @@ void parseJsonArray(structTypenamespace::myJsonArray_t &arrObj)
       arr.clear();
       arr.add("state_set");
       JsonObject obj = arr.createNestedObject();
-      JsonObject data = obj.createNestedObject("mcu00_mcuState");
+      JsonObject data = obj.createNestedObject("mcu00_state");
       JsonObject egBit = data.createNestedObject("egBit");
       for (int i = sizeof(ulBits) * 8 - 1; i >= 0; i--)
       { // 循环输出每个二进制位
@@ -238,10 +239,10 @@ void parseJsonArray(structTypenamespace::myJsonArray_t &arrObj)
           egBit[String(i)] = false;
         }
       }
-      obj["taskindex"] = state.taskindex;
-      obj["locIp"] = state.locIp;
-      obj["macId"] = state.macId;
-      obj["packageId"] = state.packageId;
+      data["taskindex"] = state.taskindex;
+      data["locIp"] = state.locIp;
+      data["macId"] = state.macId;
+      data["packageId"] = state.packageId;
     }
     else
     {
@@ -293,11 +294,13 @@ void parsejsonArrayTask(void *nullparam)
   structTypenamespace::myJsonArray_t obj;
   for (;;)
   {
-    if (xTaskNotifyWait(pdFALSE, ULONG_MAX, (uint32_t *)&ptr, portMAX_DELAY) == pdPASS)
+    // if (xTaskNotifyWait(pdFALSE, ULONG_MAX, (uint32_t *)&ptr, portMAX_DELAY) == pdPASS)
+    // {
+    //  obj = *(structTypenamespace::myJsonArray_t *)ptr;
+    if (xQueueReceive(state.parsejsonArrayQueueHandle, &obj, portMAX_DELAY) == pdPASS)
     {
-      obj = *(structTypenamespace::myJsonArray_t *)ptr;
       parseJsonArray(obj);
-      ulTaskNotifyValueClear(xTaskGetCurrentTaskHandle(), ptr); // 清除通知值
+      // ulTaskNotifyValueClear(xTaskGetCurrentTaskHandle(), ptr); // 清除通知值
     }
   }
 }
@@ -305,12 +308,9 @@ void parseStringTask(void *nullparam)
 {
   uint32_t ptr;
   structTypenamespace::myString_t obj;
-  while (1)
+  for (;;)
   {
-    // if (xTaskNotifyWait(pdFALSE, ULONG_MAX, (uint32_t *)&ptr, portMAX_DELAY) == pdPASS)
-    //     {
-    //       obj = *(structTypenamespace::myString_t *)ptr;
-    if (xQueueReceive(state.stringQueueHandle, &obj, portMAX_DELAY) == pdPASS)
+    if (xQueueReceive(state.parseStringQueueHandle, &obj, portMAX_DELAY) == pdPASS)
     {
       StaticJsonDocument<2000> doc;
       DeserializationError error = deserializeJson(doc, obj.msg);
@@ -337,7 +337,7 @@ void mcu00_serial_callback(void)
       .msg = state.mcu00_serial->readStringUntil('\n')};
   // ESP_LOGV("DEBUG", "%s", obj->sendTo_name.c_str());
   // xTaskNotify(state.parseStringTaskHandle, (uint32_t)obj, eSetValueWithOverwrite);
-  if (xQueueSend(state.stringQueueHandle, obj, 500) != pdPASS)
+  if (xQueueSend(state.parseStringQueueHandle, obj, 500) != pdPASS)
   {
     ESP_LOGV("DEBUG", "Queue is full");
   }
@@ -346,7 +346,8 @@ void setup(void)
 {
   state.eg_Handle = xEventGroupCreate();
   state.configLock = xSemaphoreCreateMutex();
-  state.stringQueueHandle = xQueueCreate(8, sizeof(structTypenamespace::myString_t));
+  state.parseStringQueueHandle = xQueueCreate(8, sizeof(structTypenamespace::myString_t));
+  state.parsejsonArrayQueueHandle = xQueueCreate(8, sizeof(structTypenamespace::myJsonArray_t));
   state.macId = String(ESP.getEfuseMac());
   state.packageId = "6227";
   state.mcu00_serial = &Serial;
@@ -390,22 +391,19 @@ void setup(void)
   structTypenamespace::myString_t notify1 = {
       .sendTo_name = std::get<0>(config.mcu00_log),
       .msg = "[\"config_get\"]"};
-  xQueueSend(state.stringQueueHandle, &notify1, eSetValueWithOverwrite);
+  xQueueSend(state.parseStringQueueHandle, &notify1, eSetValueWithOverwrite);
   structTypenamespace::myString_t notify2 = {
       .sendTo_name = std::get<0>(config.mcu00_log),
       .msg = "[\"state_get\"]"};
-  xQueueSend(state.stringQueueHandle, &notify2, eSetValueWithOverwrite);
-  // ESP_LOGV("DEBUG", "==============init_get");
+  xQueueSend(state.parseStringQueueHandle, &notify2, eSetValueWithOverwrite);
   state.mcu00_yblTaskParam = new a7129namespace::taskParam_t{
       .config = config.mcu00_ybl,
-      // .xTaskNotifyWait_taskHandle = state.parseStringTaskHandle,
-      .stringQueueHandle = state.stringQueueHandle};
+      .parseStringQueueHandle = state.parseStringQueueHandle};
   xTaskCreate(a7129namespace::yblResTask, "mcu00_yblTask", 1024 * 6, (void *)state.mcu00_yblTaskParam, state.taskindex++, NULL);
 
   state.mcu00_dz003TaskParam = new dz003namespace::taskParam_t{
       .config = config.mcu00_dz003,
-      //  .notifyWait_taskHandle = state.parseStringTaskHandle,
-      .stringQueueHandle = state.stringQueueHandle};
+      .parseStringQueueHandle = state.parseStringQueueHandle};
   xTaskCreate(dz003namespace::resTask, "mcu00_dz003Task", 1024 * 6, (void *)state.mcu00_dz003TaskParam, state.taskindex++, NULL);
 
   ESP_LOGV("DEBUG", "=========setup success");

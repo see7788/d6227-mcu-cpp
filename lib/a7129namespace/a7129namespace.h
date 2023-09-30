@@ -722,8 +722,8 @@ namespace a7129namespace
     typedef struct
     {
         config_t &config;
-        // TaskHandle_t &notifyWait_taskHandle;
-        QueueHandle_t &stringQueueHandle;
+        // TaskHandle_t &notifyTaskHandle;
+        QueueHandle_t &parseStringQueueHandle;
     } taskParam_t;
     void yblResTask(void *ptr)
     {
@@ -753,8 +753,8 @@ namespace a7129namespace
                 structTypenamespace::myString_t obj ={
                     .sendTo_name = sendTo,
                     .msg = "[\"ybl.State\"]"};
-                // xTaskNotify(c->notifyWait_taskHandle, (uint32_t)obj, eSetValueWithOverwrite);
-                if (xQueueSend(c->stringQueueHandle, &obj, 500) != pdPASS)
+                // xTaskNotify(c->notifyTaskHandle, (uint32_t)obj, eSetValueWithOverwrite);
+                if (xQueueSend(c->parseStringQueueHandle, &obj, 500) != pdPASS)
                 {
                     ESP_LOGV("DEBUG", "Queue is full");
                 }
