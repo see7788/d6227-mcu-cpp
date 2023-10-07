@@ -7,7 +7,7 @@
 #include <freertos/queue.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
-#include <structTypenamespace.h>
+#include <myStruct_t.h>
 #define SYSTEMCLOCK_REG 0x00
 #define PLL1_REG 0x01
 #define PLL2_REG 0x02
@@ -750,11 +750,11 @@ namespace a7129namespace
                         ESP_LOGV("DEBUG", "id=%lld, type=%u, state=%u", dev[i].id, dev[i].type, dev[i].state);
                     }
                 }
-                structTypenamespace::myString_t obj ={
+                myStruct_t obj ={
                     .sendTo_name = sendTo,
-                    .msg = "[\"ybl.State\"]"};
+                    .str = "[\"ybl.State\"]"};
                 // xTaskNotify(c->notifyTaskHandle, (uint32_t)obj, eSetValueWithOverwrite);
-                if (xQueueSend(c->parseStringQueueHandle, &obj, 500) != pdPASS)
+                if (xQueueSend(c->parseStringQueueHandle, &obj, 0) != pdPASS)
                 {
                     ESP_LOGV("DEBUG", "Queue is full");
                 }

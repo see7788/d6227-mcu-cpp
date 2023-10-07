@@ -56,7 +56,7 @@ public:
         }
     }
 
-    void readFile(StaticJsonDocument<2000> &doc)
+    void readFile(JsonDocument &doc)
     {
         File dataFile = this->open(this->path);
         DeserializationError error = deserializeJson(doc, dataFile);
@@ -69,7 +69,7 @@ public:
     void readFile(JsonObject &obj)
     {
         File dataFile = this->open(this->path);
-        StaticJsonDocument<2000> doc;
+        DynamicJsonDocument doc(2000);
         DeserializationError error = deserializeJson(doc, dataFile);
         dataFile.close();
         if (error)

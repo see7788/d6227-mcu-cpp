@@ -21,7 +21,7 @@
 #include <SPIFFS.h>
 #include <ArduinoJson.h>
 #include <HardwareSerial.h>
-#include <structTypenamespace.h>
+#include <myStruct_t.h>
 #include <dz003namespace.h>
 #include <a7129namespace.h>
 #include <MyFs.h>
@@ -166,7 +166,7 @@ void sendLog(String &jsonstr)
     state.mcu00_serial->println("[\"sendTo_name undefind\"]");
   }
 }
-void dz003_state_get(JsonArray &arr)
+void dz003State_get(JsonArray &arr)
 {
   arr.clear();
   arr[0].set("state_set");
@@ -174,184 +174,207 @@ void dz003_state_get(JsonArray &arr)
   JsonObject data = obj.createNestedObject("mcu00_dz003State");
   dz003namespace::state(data);
 };
-void parseJsonArray(structTypenamespace::myJsonArray_t &arrObj)
+void mcuState_get(JsonObject &obj)
 {
-  if (xSemaphoreTake(state.configLock, portMAX_DELAY) == pdTRUE)
+  uint32_t ulBits = xEventGroupGetBits(state.eg_Handle); // 获取 Event Group 变量当前值
+  JsonArray egBit = obj.createNestedArray("egBit");
+  for (int i = sizeof(ulBits) * 8 - 1; i >= 0; i--)
+  { // 循环输出每个二进制位
+    uint32_t mask = 1 << i;
+    if (ulBits & mask)
+    {
+      egBit.add(true);
+    }
+    else
+    {
+      egBit.add(false);
+    }
+  }
+  obj["taskindex"] = state.taskindex;
+  obj["locIp"] = state.locIp;
+  obj["macId"] = state.macId;
+  obj["packageId"] = state.packageId;
+}
+void parseJsonArray(myStruct_t &myStruct)
+{
+  String msg;
+  JsonArray arr = myStruct.jsonArr;
+  String api = arr[0].as<String>();
+  // ESP_LOGV("DEBUG", "parseJsonArray:%s", api.c_str());
+  if (api == "init_get")
   {
-    String msg;
-    String sendTo_name = arrObj.sendTo_name;
-    JsonArray arr = arrObj.msg;
-    String api = arr[0].as<String>();
-    // ESP_LOGV("DEBUG", "parseJsonArray:%s", api.c_str());
-    if (api == "config_set")
+    arr.clear();
+    arr.add("init_set");
+    JsonObject obj = arr.createNestedObject();
+    config_get(obj);
+    JsonObject mcu00_state = obj.createNestedObject("mcu00_state");
+    mcuState_get(mcu00_state);
+  }
+  else if (api == "config_set")
+  {
+    JsonObject obj = arr[1].as<JsonObject>();
+    config_set(obj);
+  }
+  else if (api == "config_get")
+  {
+    arr.clear();
+    arr.add("config_set");
+    JsonObject obj = arr.createNestedObject();
+    config_get(obj);
+  }
+  else if (api == "config_toFile")
+  {
+    arr.clear();
+    arr.add("config_set");
+    JsonObject obj = arr.createNestedObject();
+    config_get(obj);
+    int success = state.mcu00_configFs->writeFile(obj);
+    if (success < 1)
     {
-      JsonObject obj = arr[1].as<JsonObject>();
-      config_set(obj);
+      ESP_LOGE("writeFile", "error");
     }
-    else if (api == "config_get")
-    {
-      arr.clear();
-      arr.add("config_set");
-      JsonObject obj = arr.createNestedObject();
-      config_get(obj);
-    }
-    else if (api == "config_toFile")
-    {
-      arr.clear();
-      arr.add("config_set");
-      JsonObject obj = arr.createNestedObject();
-      config_get(obj);
-      int success = state.mcu00_configFs->writeFile(obj);
-      if (success < 1)
-      {
-        ESP_LOGE("writeFile", "error");
-      }
-    }
-    else if (api == "config_fromFile")
-    {
-      arr.clear();
-      arr.add("config_set");
-      JsonObject obj = arr.createNestedObject();
-      state.mcu00_configFs->readFile(obj);
-      config_set(obj);
-    }
-    else if (api == "restart")
-    {
-      ESP.restart();
-    }
-    else if (api == "state_get")
-    {
-      uint32_t ulBits = xEventGroupGetBits(state.eg_Handle); // 获取 Event Group 变量当前值
-      arr.clear();
-      arr.add("state_set");
-      JsonObject obj = arr.createNestedObject();
-      JsonObject data = obj.createNestedObject("mcu00_state");
-      JsonObject egBit = data.createNestedObject("egBit");
-      for (int i = sizeof(ulBits) * 8 - 1; i >= 0; i--)
-      { // 循环输出每个二进制位
-        uint32_t mask = 1 << i;
-        if (ulBits & mask)
-        {
-          egBit[String(i)] = true;
-        }
-        else
-        {
-          egBit[String(i)] = false;
-        }
-      }
-      data["taskindex"] = state.taskindex;
-      data["locIp"] = state.locIp;
-      data["macId"] = state.macId;
-      data["packageId"] = state.packageId;
-    }
-    else
-    {
-      if (api == "dz003.State")
-      {
-        dz003_state_get(arr);
-      }
-      else if (api == "dz003.fa_set")
-      {
-        dz003namespace::fa_set(arr[1].as<bool>());
-        dz003_state_get(arr);
-      }
-      else if (api == "dz003.frequency_set")
-      {
-        dz003namespace::frequency_set(arr[1].as<bool>());
-        dz003_state_get(arr);
-      }
-      else if (api == "dz003.laba_set")
-      {
-        dz003namespace::laba_set(arr[1].as<bool>());
-        dz003_state_get(arr);
-      }
-      else if (api == "dz003.deng_set")
-      {
-        dz003namespace::deng_set(arr[1].as<bool>());
-        dz003_state_get(arr);
-      }
-      else
-      {
-        arr[0].set("mcu pass");
-      }
-    }
-    serializeJson(arr, msg);
-    if (sendTo_name == "mcu00_serial")
-    {
-      state.mcu00_serial->println(msg);
-    }
-    else
-    {
-      msg = "[\"parseJsonArray sendTo_name undefind\"]";
-      sendLog(msg);
-    }
-    xSemaphoreGive(state.configLock);
+  }
+  else if (api == "config_fromFile")
+  {
+    arr.clear();
+    arr.add("config_set");
+    JsonObject obj = arr.createNestedObject();
+    state.mcu00_configFs->readFile(obj);
+    config_set(obj);
+  }
+  else if (api == "restart")
+  {
+    ESP.restart();
+  }
+  else if (api == "state_get")
+  {
+    arr.clear();
+    arr.add("state_set");
+    JsonObject obj = arr.createNestedObject();
+    JsonObject mcu00_state = obj.createNestedObject("mcu00_state");
+    mcuState_get(mcu00_state);
+  }
+  else if (api == "dz003.State")
+  {
+    dz003State_get(arr);
+  }
+  else if (api == "dz003.fa_set")
+  {
+    dz003namespace::fa_set(arr[1].as<bool>());
+    dz003State_get(arr);
+  }
+  else if (api == "dz003.frequency_set")
+  {
+    dz003namespace::frequency_set(arr[1].as<bool>());
+    dz003State_get(arr);
+  }
+  else if (api == "dz003.laba_set")
+  {
+    dz003namespace::laba_set(arr[1].as<bool>());
+    dz003State_get(arr);
+  }
+  else if (api == "dz003.deng_set")
+  {
+    dz003namespace::deng_set(arr[1].as<bool>());
+    dz003State_get(arr);
+  }
+  else
+  {
+    arr[0].set("mcu pass");
+  }
+  serializeJson(arr, msg);
+  if (myStruct.sendTo_name == "mcu00_serial")
+  {
+    state.mcu00_serial->println(msg);
+  }
+  else
+  {
+    msg = "[\"parseJsonArray sendTo_name undefind\"]";
+    sendLog(msg);
   }
 }
+
 void parsejsonArrayTask(void *nullparam)
 {
   uint32_t ptr;
-  structTypenamespace::myJsonArray_t obj;
+  myStruct_t myStruct;
   for (;;)
   {
     // if (xTaskNotifyWait(pdFALSE, ULONG_MAX, (uint32_t *)&ptr, portMAX_DELAY) == pdPASS)
     // {
-    //  obj = *(structTypenamespace::myJsonArray_t *)ptr;
-    if (xQueueReceive(state.parsejsonArrayQueueHandle, &obj, portMAX_DELAY) == pdPASS)
+    //  myStruct = *(structTypenamespace::myJsonArray_t *)ptr;
+    if (xQueueReceive(state.parsejsonArrayQueueHandle, &myStruct, portMAX_DELAY) == pdPASS)
     {
-      parseJsonArray(obj);
       // ulTaskNotifyValueClear(xTaskGetCurrentTaskHandle(), ptr); // 清除通知值
+      if (xSemaphoreTake(state.configLock, portMAX_DELAY) == pdTRUE)
+      {
+        parseJsonArray(myStruct);
+        xSemaphoreGive(state.configLock);
+      }
+      else
+      {
+        ESP_LOGE("DEBUG", "xSemaphoreTake !=pdFALSE");
+      }
+    }
+    else
+    {
+      ESP_LOGV("DEBUG", "parsejsonArrayTask xQueueReceive != pdPASS");
     }
   }
 }
 void parseStringTask(void *nullparam)
 {
   uint32_t ptr;
-  structTypenamespace::myString_t obj;
+  myStruct_t myStruct;
   for (;;)
   {
-    if (xQueueReceive(state.parseStringQueueHandle, &obj, portMAX_DELAY) == pdPASS)
+    if (xQueueReceive(state.parseStringQueueHandle, &myStruct, portMAX_DELAY) == pdPASS)
     {
       StaticJsonDocument<2000> doc;
-      DeserializationError error = deserializeJson(doc, obj.msg);
+      DeserializationError error = deserializeJson(doc, myStruct.str);
       if (error)
       {
-        String msg = "[\"parseStringTask error\",\"" + String(error.c_str()) + "\",\"" + obj.msg + "\"]";
+        String msg = "[\"parseStringTask error\",\"" + String(error.c_str()) + "\",\"" + myStruct.str + "\"]";
         sendLog(msg);
       }
       else
       {
-        JsonArray arr = doc.as<JsonArray>();
-        structTypenamespace::myJsonArray_t arrObj = {
-            .sendTo_name = obj.sendTo_name,
-            .msg = arr};
-        parseJsonArray(arrObj);
+        myStruct.str.clear();
+        myStruct.jsonArr = doc.as<JsonArray>();
+        if (xQueueSend(state.parsejsonArrayQueueHandle, &myStruct, 0) != pdPASS)
+        {
+          ESP_LOGV("DEBUG", "parseStringQueueHandle is full");
+        }
       }
+    }
+    else
+    {
+      ESP_LOGV("DEBUG", "parseStringTask xQueueReceive != pdPASS");
     }
   }
 }
 void mcu00_serial_callback(void)
 {
-  structTypenamespace::myString_t *obj = new structTypenamespace::myString_t{
+  myStruct_t myStruct = {
       .sendTo_name = std::get<0>(config.mcu00_serial),
-      .msg = state.mcu00_serial->readStringUntil('\n')};
-  // ESP_LOGV("DEBUG", "%s", obj->sendTo_name.c_str());
-  // xTaskNotify(state.parseStringTaskHandle, (uint32_t)obj, eSetValueWithOverwrite);
-  if (xQueueSend(state.parseStringQueueHandle, obj, 500) != pdPASS)
+      .str = state.mcu00_serial->readStringUntil('\n')};
+  if (xQueueSend(state.parseStringQueueHandle, &myStruct, 0) != pdPASS)
   {
-    ESP_LOGV("DEBUG", "Queue is full");
+    ESP_LOGV("DEBUG", "parseStringQueueHandle is full");
   }
 }
 void setup(void)
 {
   state.eg_Handle = xEventGroupCreate();
   state.configLock = xSemaphoreCreateMutex();
-  state.parseStringQueueHandle = xQueueCreate(8, sizeof(structTypenamespace::myString_t));
-  state.parsejsonArrayQueueHandle = xQueueCreate(8, sizeof(structTypenamespace::myJsonArray_t));
+  state.parseStringQueueHandle = xQueueCreate(10, sizeof(myStruct_t));
+  state.parsejsonArrayQueueHandle = xQueueCreate(10, sizeof(myStruct_t));
   state.macId = String(ESP.getEfuseMac());
   state.packageId = "6227";
   state.mcu00_serial = &Serial;
   state.mcu00_serial->begin(115200);
+  // state.mcu00_serial->setRxBufferSize(1024);
+  // state.mcu00_serial->setTxBufferSize(1024);
 
   ESP_ERROR_CHECK(esp_task_wdt_init(20000, false)); // 初始化看门狗
   ESP_ERROR_CHECK(esp_task_wdt_add(NULL));
@@ -367,7 +390,7 @@ void setup(void)
   ESP_LOGV("DEBUG", "=======esp_event_handler_register success=========");
 
   state.mcu00_configFs = new MyFs("/config.json");
-  StaticJsonDocument<2000> doc;
+  DynamicJsonDocument doc(2000);
   state.mcu00_configFs->readFile(doc);
   JsonObject obj = doc.as<JsonObject>();
   config_set(obj);
@@ -383,18 +406,15 @@ void setup(void)
   state.mcu00_serial->onReceive(mcu00_serial_callback);
   ESP_LOGV("DEBUG", "=========mcu00_serial");
 
-  xTaskCreate(parseStringTask, "parseStringTask", 1024 * 20, NULL, state.taskindex++, &state.parseStringTaskHandle);
-  xTaskCreate(parsejsonArrayTask, "parsejsonArrayTask", 1024 * 20, NULL, state.taskindex++, &state.parsejsonArrayTaskHandle);
-  ESP_LOGV("DEBUG", "============parseTask");
   state.mcu00_net = new MyNet(config.mcu00_net);
   xEventGroupWaitBits(state.eg_Handle, EGBIG_MCU_NET, pdTRUE, pdTRUE, portMAX_DELAY);
-  structTypenamespace::myString_t notify1 = {
+  myStruct_t notify1 = {
       .sendTo_name = std::get<0>(config.mcu00_log),
-      .msg = "[\"config_get\"]"};
+      .str = "[\"config_get\"]"};
   xQueueSend(state.parseStringQueueHandle, &notify1, eSetValueWithOverwrite);
-  structTypenamespace::myString_t notify2 = {
+  myStruct_t notify2 = {
       .sendTo_name = std::get<0>(config.mcu00_log),
-      .msg = "[\"state_get\"]"};
+      .str = "[\"state_get\"]"};
   xQueueSend(state.parseStringQueueHandle, &notify2, eSetValueWithOverwrite);
   state.mcu00_yblTaskParam = new a7129namespace::taskParam_t{
       .config = config.mcu00_ybl,
@@ -405,6 +425,9 @@ void setup(void)
       .config = config.mcu00_dz003,
       .parseStringQueueHandle = state.parseStringQueueHandle};
   xTaskCreate(dz003namespace::resTask, "mcu00_dz003Task", 1024 * 6, (void *)state.mcu00_dz003TaskParam, state.taskindex++, NULL);
+
+  xTaskCreate(parseStringTask, "parseStringTask", 1024 * 20, NULL, state.taskindex++, &state.parseStringTaskHandle);
+  xTaskCreate(parsejsonArrayTask, "parsejsonArrayTask", 1024 * 20, NULL, state.taskindex++, &state.parsejsonArrayTaskHandle);
 
   ESP_LOGV("DEBUG", "=========setup success");
   // vTaskStartScheduler();//Arduin内部已经启用

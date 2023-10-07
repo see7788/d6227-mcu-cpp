@@ -9,7 +9,7 @@
 #include <freertos/queue.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
-#include <structTypenamespace.h>
+#include <myStruct_t.h>
 #define ETH_ADDR 1
 #define ETH_POWER_PIN -1
 #define ETH_MDC_PIN 23
@@ -212,10 +212,10 @@ namespace dz003namespace
          {
             work_set(false);
          }
-         structTypenamespace::myString_t obj = {
+         myStruct_t obj = {
              .sendTo_name = sendTo,
-             .msg = "[\"dz003.State\"]"};
-         if (xQueueSend(c->parseStringQueueHandle, &obj, 500) != pdPASS)
+             .str = "[\"dz003.State\"]"};
+         if (xQueueSend(c->parseStringQueueHandle, &obj, 0) != pdPASS)
          {
             ESP_LOGV("DEBUG", "Queue is full");
          }
