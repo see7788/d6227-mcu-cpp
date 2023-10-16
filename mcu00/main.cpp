@@ -26,7 +26,6 @@
 #include <a7129namespace.h>
 #include <MyFs.h>
 #include <MyNet.h>
-#include <MyIpc.h>
 #define EGBIG_CONFIG (1 << 0)
 #define EGBIG_NET (1 << 1)
 #define EGBIG_YBL (1 << 2)
