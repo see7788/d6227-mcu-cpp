@@ -187,6 +187,7 @@ namespace dz003namespace
    {
       config_t &config;
       QueueHandle_t &parseStringQueueHandle;
+      std::function<void(void)> startCallback;
    } taskParam_t;
    void resTask(void *ptr)
    {
@@ -202,7 +203,8 @@ namespace dz003namespace
       String sendTo;
       int v0v1abs_c, v0v1absLoop_c, loopNumber_c, set0tick_c;
       std::tie(sendTo, v0v1abs_c, v0v1absLoop_c, loopNumber_c, set0tick_c) = c->config;
-      ESP_LOGV("DEBUG", "SUCCESS");
+      ESP_LOGV("DZ003", "SUCCESS");
+      c->startCallback();
       while (1)
       {
          loopNumber_log += 1;
@@ -217,7 +219,7 @@ namespace dz003namespace
              .str = "[\"dz003.State\"]"};
          if (xQueueSend(c->parseStringQueueHandle, &obj, 0) != pdPASS)
          {
-            ESP_LOGV("DEBUG", "Queue is full");
+            ESP_LOGV("DZ003", "Queue is full");
          }
          frequency_valueset0();
          if (loopNumber_log > loopNumber_c)

@@ -1,43 +1,40 @@
 import subprocess
 import os
 import json
-Import("env", "projenv")
-# print(dir(projenv))
-# print(env)
-# for key, value in env.items():
-#     print(key, ":", value)
-try:
-    mcuPath = env.get("PROJECT_DIR")
-    srcFilePath = os.path.abspath(mcuPath+"/../d6227-mcu-ts/src/useStore.ts")
-    saveFilePath = os.path.abspath(mcuPath+"/data/config.json")
-    if os.path.exists(saveFilePath):
-        os.remove(saveFilePath)
-    print('srcFilePath:', srcFilePath, ";\nsaveFilePath:", saveFilePath)
-    with open(srcFilePath, 'r') as f:
-        ts_content = f.read()
-    startstr = "const mcu00: mcu00_t = "
-    start_index = ts_content.index(startstr) + len(startstr)
-    end_index = ts_content.find("};", start_index)+1
-    mcu00_str = ts_content[start_index:end_index].strip()
-    print(mcu00_str)
-    if (mcu00_str):
-        mcu00 = eval(mcu00_str)
-        with open(saveFilePath, 'w') as f:
-            json.dump(mcu00, f)
-    else:
-        print("\nmcu00 undefind\n")
-    def uploadfsfiles_to_target(env,*args, **kwargs):
-        # firmware_path = env.get("PROG_PATH")
-        # print("***************************")
-        # print(firmware_path)
-        # print("*************************")
-        result = subprocess.run(["platformio", "run", "--target", "uploadfs", "--environment", "mcu00", "--upload-port", "COM3"])
-        print(result)
-    env.AddPreAction("upload", uploadfsfiles_to_target)
-except subprocess.CalledProcessError as e:
-    print(e)
-finally:
-    print("\nsuccess\n")
+Import("env")
+print(env.Dump())
+# try:
+#     mcuPath = env.get("PROJECT_DIR")
+#     srcFilePath = os.path.abspath(mcuPath+"/../d6227-mcu-ts/src/useStore.ts")
+#     saveFilePath = os.path.abspath(mcuPath+"/data/config.json")
+#     if os.path.exists(saveFilePath):
+#         os.remove(saveFilePath)
+#     print('srcFilePath:', srcFilePath, ";\nsaveFilePath:", saveFilePath)
+#     with open(srcFilePath, 'r') as f:
+#         ts_content = f.read()
+#     startstr = "const mcu00: mcu00_t = "
+#     start_index = ts_content.index(startstr) + len(startstr)
+#     end_index = ts_content.find("};", start_index)+1
+#     mcu00_str = ts_content[start_index:end_index].strip()
+#     print(mcu00_str)
+#     if (mcu00_str):
+#         mcu00 = eval(mcu00_str)
+#         with open(saveFilePath, 'w') as f:
+#             json.dump(mcu00, f)
+#     else:
+#         print("\nmcu00 undefind\n")
+#     def uploadfsfiles_to_target(env,*args, **kwargs):
+#         # firmware_path = env.get("PROG_PATH")
+#         # print("***************************")
+#         # print(firmware_path)
+#         # print("*************************")
+#         result = subprocess.run(["platformio", "run", "--target", "uploadfs", "--environment", "mcu00", "--upload-port", "COM3"])
+#         print(result)
+#     env.AddPreAction("upload", uploadfsfiles_to_target)
+# except subprocess.CalledProcessError as e:
+#     print(e)
+# finally:
+#     print("\nsuccess\n")
 
 # try:
 #     # result = subprocess.run(['where', 'platformio'],

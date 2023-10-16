@@ -724,6 +724,7 @@ namespace a7129namespace
         config_t &config;
         // TaskHandle_t &notifyTaskHandle;
         QueueHandle_t &parseStringQueueHandle;
+        std::function<void(void)> startCallback;
     } taskParam_t;
     void yblResTask(void *ptr)
     {
@@ -738,7 +739,8 @@ namespace a7129namespace
         StrobeCMD(CMD_RX); // 设为接收模式
         pinMode(GIO1, INPUT_PULLUP);
         attachInterrupt(GIO1, yblInterrupt, FALLING); // 创建中断
-        ESP_LOGV("DEBUG", "SUCCESS");
+        ESP_LOGV("A7129", "SUCCESS");
+        c->startCallback();
         while (1)
         {
             if (interrupt_state == 1)
@@ -747,16 +749,16 @@ namespace a7129namespace
                 {
                     if (dev[i].id)
                     {
-                        ESP_LOGV("DEBUG", "id=%lld, type=%u, state=%u", dev[i].id, dev[i].type, dev[i].state);
+                        ESP_LOGV("A7129", "id=%lld, type=%u, state=%u", dev[i].id, dev[i].type, dev[i].state);
                     }
                 }
-                myStruct_t obj ={
+                myStruct_t obj = {
                     .sendTo_name = sendTo,
                     .str = "[\"ybl.State\"]"};
                 // xTaskNotify(c->notifyTaskHandle, (uint32_t)obj, eSetValueWithOverwrite);
                 if (xQueueSend(c->parseStringQueueHandle, &obj, 0) != pdPASS)
                 {
-                    ESP_LOGV("DEBUG", "Queue is full");
+                    ESP_LOGV("A7129", "Queue is full");
                 }
                 interrupt_state = 0;
             }

@@ -7,7 +7,6 @@ typedef struct
 {
     String sendTo_name;
     String str;
-    JsonArray jsonArr;
 } myStruct_t;
 // namespace structTypenamespace
 // {

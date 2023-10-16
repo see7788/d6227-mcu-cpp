@@ -1,9 +1,10 @@
 #ifndef MyFs_h
 #define MyFs_h
-#include <LittleFS.h>
 #include <ArduinoJson.h>
+#include <LittleFS.h>
 #include <esp_log.h>
-class MyFs : public fs::LittleFSFS
+// class MyFs : public fs::LittleFSFS
+class MyFs
 {
 private:
     const char *path;
@@ -14,22 +15,28 @@ public:
     MyFs(const char *config)
         : path(config)
     {
-        this->begin_bool = this->begin(true);
-        ESP_LOGV("DEBUG", "this->begin_bool=%s", this->begin_bool ? "true" : "false");
-        this->file_bool = this->exists(path);
-        ESP_LOGV("DEBUG", "this->file_bool=%s", this->file_bool ? "true" : "false");
+        this->begin_bool = LittleFS.begin(true);
+        if (!this->begin_bool)
+        {
+            ESP_LOGE("DEBUG", "!this->begin_bool");
+        }
+        this->file_bool = LittleFS.exists(path);
+        if (!this->file_bool)
+        {
+            ESP_LOGE("DEBUG", "!this->file_bool");
+        }
     }
     void listFilePrint(const char *dirname, uint8_t levels)
     {
-        File root = this->open(dirname);
+        File root = LittleFS.open(dirname);
         if (!root)
         {
-            Serial.println("- failed to open directory");
+            ESP_LOGE("", "failed to open directory");
             return;
         }
         if (!root.isDirectory())
         {
-            Serial.println(" - not a directory");
+            ESP_LOGE("", "not a directory");
             return;
         }
 
@@ -38,8 +45,7 @@ public:
         {
             if (file.isDirectory())
             {
-                Serial.print("  DIR : ");
-                Serial.println(file.name());
+                ESP_LOGV("", "DIR:%s", file.name());
                 if (levels)
                 {
                     listFilePrint(file.path(), levels - 1);
@@ -47,52 +53,58 @@ public:
             }
             else
             {
-                Serial.print("  FILE: ");
-                Serial.print(file.name());
-                Serial.print("\tSIZE: ");
-                Serial.println(file.size());
+                ESP_LOGV("", "FILE:%s\tSIZE:%zu", file.name(), file.size());
             }
             file = root.openNextFile();
         }
     }
 
-    void readFile(JsonDocument &doc)
+    bool readFile(JsonDocument &doc)
     {
-        File dataFile = this->open(this->path);
+        if (!this->file_bool)
+        {
+            ESP_LOGE("", "!this->file_bool");
+            return false;
+        }
+        File dataFile = LittleFS.open(this->path, "r");
+        if (!dataFile)
+        {
+            return false;
+        }
         DeserializationError error = deserializeJson(doc, dataFile);
         dataFile.close();
         if (error)
         {
-            ESP_LOGE("ERROR", "%s", error.c_str());
+            ESP_LOGE("", "error %s", error.c_str());
+            return false;
         }
+        // serializeJson(doc, Serial);
+        // ESP_LOGV("", "");
+        return true;
     }
-    void readFile(JsonObject &obj)
+    bool readFile(JsonObject obj)
     {
-        File dataFile = this->open(this->path);
-        DynamicJsonDocument doc(2000);
-        DeserializationError error = deserializeJson(doc, dataFile);
-        dataFile.close();
-        if (error)
+        StaticJsonDocument<2000> doc;
+        bool c = readFile(doc);
+        if (c)
         {
-            ESP_LOGE("ERROR", "%s", error.c_str());
+            obj.set(doc.as<JsonObject>());
         }
-        else
-        {
-            JsonObject obj2 = doc.as<JsonObject>();
-            obj.set(obj2);
-            // String str;
-            // serializeJson(obj, str);
-            // ESP_LOGV("DEBUG", "%s", str);
-            // str="";
-            // serializeJson(obj2, str);
-            // ESP_LOGV("DEBUG", "%s", str);
-            // serializeJson(obj, Serial);
-        }
+        return c;
     }
-    int writeFile(JsonObject &obj)
+    bool writeFile(JsonObject obj)
     {
-        File dataFile = this->open(path, "w");
-        return serializeJson(obj, dataFile);
+        if (!this->file_bool)
+        {
+            ESP_LOGE("", "!this->file_bool");
+            return false;
+        }
+        File dataFile = LittleFS.open(path, "w");
+        if (!dataFile)
+        {
+            return false;
+        }
+        return serializeJson(obj, dataFile) ? true : false;
     }
 };
 #endif
