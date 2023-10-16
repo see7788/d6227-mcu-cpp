@@ -216,7 +216,7 @@ namespace dz003namespace
          }
          myStruct_t obj = {
              .sendTo_name = sendTo,
-             .str = "[\"dz003.State\"]"};
+             .str = "[\"mcu_dz003State_get\"]"};
          if (xQueueSend(c->parseStringQueueHandle, &obj, 0) != pdPASS)
          {
             ESP_LOGV("DZ003", "Queue is full");

@@ -92,6 +92,9 @@ void config_set(JsonObject obj)
   {
     JsonArray mcu_const = obj["mcu_const"].as<JsonArray>();
     config.mcu_const = std::make_tuple(mcu_const[0].as<String>(), mcu_const[1].as<String>(), mcu_const[2].as<String>());
+    ESP_LOGV("config_set", "%s", std::get<0>(config.mcu_const).c_str());
+    ESP_LOGV("config_set", "%s", std::get<1>(config.mcu_const).c_str());
+    ESP_LOGV("config_set", "%s", std::get<2>(config.mcu_const).c_str());
   }
   if (obj.containsKey("mcu_log"))
   {
@@ -134,6 +137,9 @@ void config_get(JsonObject obj)
   mcu_const.add(std::get<0>(config.mcu_const));
   mcu_const.add(std::get<1>(config.mcu_const));
   mcu_const.add(std::get<2>(config.mcu_const));
+  ESP_LOGV("config_get", "%s", std::get<0>(config.mcu_const).c_str());
+  ESP_LOGV("config_get", "%s", std::get<1>(config.mcu_const).c_str());
+  ESP_LOGV("config_get", "%s", std::get<2>(config.mcu_const).c_str());
   JsonArray mcu_log = obj.createNestedArray("mcu_log");
   mcu_log.add(std::get<0>(config.mcu_log));
   JsonArray mcu_serial = obj.createNestedArray("mcu_serial");
@@ -185,14 +191,6 @@ void mcuState_get(JsonObject obj)
   obj["locIp"] = state.locIp;
   obj["macId"] = state.macId;
 }
-void dz003State_get(JsonArray arr)
-{
-  arr.clear();
-  arr[0].set("state_set");
-  JsonObject obj = arr.createNestedObject();
-  JsonObject data = obj.createNestedObject("mcu_dz003State");
-  dz003namespace::state(data);
-};
 void parseJsonArray(JsonArray arr, myStruct_t myStruct)
 {
   String api = arr[0].as<String>();
@@ -255,36 +253,41 @@ void parseJsonArray(JsonArray arr, myStruct_t myStruct)
       JsonObject mcu_state = obj.createNestedObject("mcu_state");
       mcuState_get(mcu_state);
     }
-    else if (api == "mcu_dz003.fa_set")
+    else if (api.indexOf("mcu_dz003")>-1)
     {
-      dz003namespace::fa_set(arr[1].as<bool>());
-      dz003State_get(arr);
-    }
-    else if (api == "mcu_dz003.frequency_set")
-    {
-      dz003namespace::frequency_set(arr[1].as<bool>());
-      dz003State_get(arr);
-    }
-    else if (api == "mcu_dz003.laba_set")
-    {
-      dz003namespace::laba_set(arr[1].as<bool>());
-      dz003State_get(arr);
-    }
-    else if (api == "mcu_dz003.deng_set")
-    {
-      dz003namespace::deng_set(arr[1].as<bool>());
-      dz003State_get(arr);
+      if (api == "mcu_dz003.fa_set")
+      {
+        dz003namespace::fa_set(arr[1].as<bool>());
+      }
+      else if (api == "mcu_dz003.frequency_set")
+      {
+        dz003namespace::frequency_set(arr[1].as<bool>());
+      }
+      else if (api == "mcu_dz003.laba_set")
+      {
+        dz003namespace::laba_set(arr[1].as<bool>());
+      }
+      else if (api == "mcu_dz003.deng_set")
+      {
+        dz003namespace::deng_set(arr[1].as<bool>());
+      }
+      arr.clear();
+      arr[0].set("state_set");
+      JsonObject obj = arr.createNestedObject();
+      JsonObject data = obj.createNestedObject("mcu_dz003State");
+      dz003namespace::state(data);
     }
     else
     {
       arr[0].set("mcu pass");
+      arr[1].set(api);
     }
     xSemaphoreGive(state.configLock);
     serializeJson(arr, myStruct.str);
     // state.mcu_serial->println(myStruct.str);
     if (xQueueSend(state.sendToQueueHandle, &myStruct, 0) != pdPASS)
     {
-      ESP_LOGD("parseJsonArray", "sendToQueueHandle is full");
+      ESP_LOGE("parseJsonArray", "sendToQueueHandle is full");
     }
   }
   else
@@ -359,33 +362,37 @@ void mcu_serial_callback(void)
       .str = state.mcu_serial->readStringUntil('\n')};
   if (xQueueSendFromISR(state.parseStringQueueHandle, &myStruct, 0) != pdPASS)
   {
-    ESP_LOGD("mcu_serial_callback", "parseStringQueueHandle is full");
+    ESP_LOGE("mcu_serial_callback", "parseStringQueueHandle is full");
   }
 }
-void initConfig(void)
+void initConfig(std::function<void(void)> startCallback)
 {
 
   StaticJsonDocument<2000> doc;
-  // state.mcu_configFs->readFile(doc);//与下行代码交换位置，会不正常
-  // JsonObject obj = doc.as<JsonObject>();//这里用doc.to，也不正常
-  // obj["t"] = "readFile config_set";
-  JsonObject obj = doc.to<JsonObject>();
-  state.mcu_configFs->readFile(obj);
+  state.mcu_configFs->readFile(doc);     // 与下行代码交换位置，会不正常
+  JsonObject obj = doc.as<JsonObject>(); // 这里用doc.to，也不正常
+  // JsonObject obj = doc.to<JsonObject>();
+  // state.mcu_configFs->readFile(obj);
   config_set(obj);
+  obj["t"] = "readFile config_set";
+  obj["testindex"] = state.testindex++;
   serializeJson(obj, *state.mcu_serial);
-  ESP_LOGV("getFreeHeap", "%d=%d", state.testindex++, ESP.getFreeHeap());
+  ESP_LOGV("getFreeHeap", "%d", ESP.getFreeHeap());
+  startCallback();
 
   obj.clear();
-  // obj["t"] = "config_get";
   config_get(obj);
+  obj["t"] = "config_get";
+  obj["testindex"] = state.testindex++;
   serializeJson(obj, *state.mcu_serial);
-  ESP_LOGV("getFreeHeap", "%d=%d", state.testindex++, ESP.getFreeHeap());
+  ESP_LOGV("getFreeHeap", "%d", ESP.getFreeHeap());
 
   obj.clear();
-  // obj["t"] = "mcuState_get";
   mcuState_get(obj);
+  obj["t"] = "mcuState_get";
+  obj["testindex"] = state.testindex++;
   serializeJson(obj, *state.mcu_serial);
-  ESP_LOGV("getFreeHeap", "%d=%d", state.testindex++, ESP.getFreeHeap());
+  ESP_LOGV("getFreeHeap", "%d", ESP.getFreeHeap());
 
   // ESP_LOGD("getFreeHeap", "%d\n", ESP.getFreeHeap());           // 打印剩余堆内存大小
   // ESP_LOGD("free_heap_size", "%d\n", esp_get_free_heap_size()); // 打印空闲堆内存
@@ -397,16 +404,6 @@ void initConfig(void)
   // free(pbuffer);
 }
 
-void initConfigTask(void *nullparam)
-{
-  StaticJsonDocument<2000> doc;
-  JsonObject obj = doc.as<JsonObject>();
-  for (;;)
-  {
-    initConfig();
-    vTaskDelay(3000);
-  }
-}
 void setup(void)
 {
   state.macId = String(ESP.getEfuseMac());
@@ -431,19 +428,15 @@ void setup(void)
   ESP_ERROR_CHECK(esp_event_handler_register(ETH_EVENT, ESP_EVENT_ANY_ID, esp_eg_on, (void *)__func__));
   ESP_ERROR_CHECK(esp_event_handler_register(SC_EVENT, ESP_EVENT_ANY_ID, esp_eg_on, (void *)__func__));
 
-  initConfig();
-  ESP_LOGV("getFreeHeap", "%d=%d", state.testindex++, ESP.getFreeHeap());
-
-  xEventGroupSetBits(state.eg_Handle, EGBIG_CONFIG);
+  initConfig([]()
+             { xEventGroupSetBits(state.eg_Handle, EGBIG_CONFIG); });
   xEventGroupWaitBits(state.eg_Handle, EGBIG_CONFIG, pdFALSE, pdTRUE, portMAX_DELAY);
-  ESP_LOGD("getFreeHeap", "%d", ESP.getFreeHeap());
 
   state.mcu_serial->begin(std::get<1>(config.mcu_serial));
   state.mcu_serial->onReceive(mcu_serial_callback);
 
   state.mcu_net = new MyNet(config.mcu_net);
   xEventGroupWaitBits(state.eg_Handle, EGBIG_NET, pdFALSE, pdTRUE, portMAX_DELAY);
-  ESP_LOGV("getFreeHeap", "%d=%d", state.testindex++, ESP.getFreeHeap());
 
   state.mcu_yblTaskParam = new a7129namespace::taskParam_t{
       .config = config.mcu_ybl,
@@ -454,27 +447,20 @@ void setup(void)
       }};
   xTaskCreate(a7129namespace::yblResTask, "mcu_yblTask", 1024 * 6, (void *)state.mcu_yblTaskParam, state.taskindex++, NULL);
   xEventGroupWaitBits(state.eg_Handle, EGBIG_YBL, pdFALSE, pdTRUE, portMAX_DELAY);
-  ESP_LOGV("getFreeHeap", "%d=%d", state.testindex++, ESP.getFreeHeap());
 
-  // state.mcu_dz003TaskParam = new dz003namespace::taskParam_t{
-  //     .config = config.mcu_dz003,
-  //     .parseStringQueueHandle = state.parseStringQueueHandle,
-  //     .startCallback = []()
-  //     {
-  //       xEventGroupSetBits(state.eg_Handle, EGBIG_DZ003);
-  //     }};
-  // xTaskCreate(dz003namespace::resTask, "mcu_dz003Task", 1024 * 6, (void *)state.mcu_dz003TaskParam, state.taskindex++, NULL);
-  // xEventGroupWaitBits(state.eg_Handle, EGBIG_DZ003, pdFALSE, pdTRUE, portMAX_DELAY);
-  ESP_LOGV("getFreeHeap", "%d=%d", state.testindex++, ESP.getFreeHeap());
+  state.mcu_dz003TaskParam = new dz003namespace::taskParam_t{
+      .config = config.mcu_dz003,
+      .parseStringQueueHandle = state.parseStringQueueHandle,
+      .startCallback = []()
+      {
+        xEventGroupSetBits(state.eg_Handle, EGBIG_DZ003);
+      }};
+  xTaskCreate(dz003namespace::resTask, "mcu_dz003Task", 1024 * 6, (void *)state.mcu_dz003TaskParam, state.taskindex++, NULL);
+  xEventGroupWaitBits(state.eg_Handle, EGBIG_DZ003, pdFALSE, pdTRUE, portMAX_DELAY);
 
   xTaskCreate(parseStringTask, "parseStringTask", 1024 * 10, NULL, state.taskindex++, NULL);
-  ESP_LOGV("getFreeHeap", "%d=%d", state.testindex++, ESP.getFreeHeap());
 
   xTaskCreate(sendToTask, "sendToTask", 1024 * 4, NULL, state.taskindex++, NULL);
-  ESP_LOGV("getFreeHeap", "%d=%d", state.testindex++, ESP.getFreeHeap());
-
-  xTaskCreate(initConfigTask, "myTestloopTask", 1024 * 20, NULL, state.taskindex++, NULL);
-  ESP_LOGV("getFreeHeap", "%d=%d", state.testindex++, ESP.getFreeHeap());
 
   vTaskDelete(NULL);
 }
