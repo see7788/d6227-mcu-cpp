@@ -2,13 +2,14 @@ import os
 Import("env")
 # print(env.Dump())
 PIOENV=env.get("PIOENV")
-PROJECT_DIR = env.get("PROJECT_DIR")  # 保存当前工作目录
+PROJECT_DIR = env.get("PROJECT_DIR") 
 toDir=os.path.abspath(PROJECT_DIR+"/data")
 os.chdir("../d6227-mcu-ts")
 print("当前：",os.getcwd())
 try:
     cmd=f"esno src/scriptGetData.ts --mode={PIOENV} --toDir={toDir}"
-    os.system(cmd)
+    # os.system(cmd)
+    env.Execute(cmd)
 except Exception as e:
     print("错误",e)
 os.chdir(PROJECT_DIR)  # 返回原始工作目录
