@@ -275,7 +275,7 @@ void parseJsonArray(JsonArray arr, myStruct_t myStruct)
       arr[0].set("state_set");
       JsonObject obj = arr.createNestedObject();
       JsonObject data = obj.createNestedObject("mcu_dz003State");
-      dz003namespace::state(data);
+      dz003namespace::getState(data);
     }
     else
     {
