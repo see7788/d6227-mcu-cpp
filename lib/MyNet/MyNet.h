@@ -6,16 +6,16 @@
 class MyNet
 {
 public:
-    typedef String type_t;//""| "ap" | "sta" | "eth" | "ap+sta" | "ap+eth"
+    typedef String type_t; //""| "ap" | "sta" | "eth" | "ap+sta" | "ap+eth"
     typedef std::tuple<String> ap_t;
     typedef std::tuple<String, String> sta_t;
-    typedef std::tuple<String, ap_t, sta_t> config_t;
+    typedef std::tuple<String, ap_t, sta_t, String> config_t;
     MyNet(config_t &config)
     {
         type_t uset;
         ap_t ap;
         sta_t sta;
-        std::tie(uset, ap, sta) = config;
+        std::tie(uset, ap, sta, std::ignore) = config;
         if (uset == "ap")
         {
             WiFi.mode(WIFI_AP);
@@ -44,7 +44,7 @@ public:
         }
         else
         {
-            ESP_LOGV("debug", "init bug %s",uset.c_str());
+            ESP_LOGV("debug", "init bug %s", uset.c_str());
         }
     }
 };

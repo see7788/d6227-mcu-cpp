@@ -1,6 +1,5 @@
 #ifndef dz003namespace_h
 #define dz003namespace_h
-#include <ETH.h> //引用以使用ETH
 #include <Arduino.h>
 #include <esp_log.h>
 #include <ArduinoJson.h>
@@ -10,10 +9,8 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <myStruct_t.h>
-#define ETH_ADDR 1
-#define ETH_POWER_PIN -1
-#define ETH_MDC_PIN 23
-#define ETH_MDIO_PIN 18
+#include <functional>
+#include <dz003gpionamespace.h>
 
 /*
 
@@ -33,145 +30,27 @@ memset(&data,0,sizeof(data));
 */
 namespace dz003namespace
 {
-   typedef std::tuple<String, int, int, int, int> config_t; // sendTo_name,v0v1abs_c，v0v1absLoop_c，loopNumber_c，set0tick_c
-   const struct config_index_t
-   {
-      char sendTo_name;
-      char v0v1abs;
-      char v0v1absLoop;
-      char loopNumber;
-      char set0tick;
-   } config_index = {0, 1, 2, 3, 4};
-   const struct frequency_log_index_t
-   {
-      char v0v1abs;
-      char v0v1absLoop;
-      char loopNumber;
-   } frequency_log_index = {0, 1, 2};
+   typedef std::tuple<String, int, int, int, int,String> config_t; // sendTo_name,v0v1abs_c，v0v1absLoop_c，loopNumber_c，set0tick_c
    typedef struct
    {
       config_t &config;
       QueueHandle_t &parseStringQueueHandle;
       std::function<void(void)> startCallback;
    } taskParam_t;
-   
-   void eth_begin()
-   {
-      ETH.begin(ETH_ADDR, ETH_POWER_PIN, ETH_MDC_PIN, ETH_MDIO_PIN, ETH_PHY_LAN8720, ETH_CLOCK_GPIO17_OUT);
-   }
-   // 水通断控制
-   typedef struct
-   {
-      int gpio;
-      bool working;
-   } fa_t;
-   fa_t fa;
-   void fa_set(bool c)
-   {
-      digitalWrite(fa.gpio, c ? HIGH : LOW);
-      fa.working = c;
-   }
-   // 脉冲控制//逆向水应该不支持
-   typedef struct
-   {
-      int gpio[2];
-      bool working;
-      int value[2];
-      int log[4];
-   } frequency_t;
-   frequency_t frequency;
-   void frequency_value0Add(void)
-   {
-      frequency.value[0] += 1;
-   }
-   void frequency_value1Add(void)
-   {
-      frequency.value[1] += 1;
-   }
-   void frequency_set(bool c)
-   {
-      frequency.working = c;
-      int v0 = frequency.gpio[0];
-      int v1 = frequency.gpio[1];
-      if (c)
-      {
-         // LOW： 当引脚为低电平时触发中断服务程序
-         // CHANGE： 当引脚电平发生变化时触发中断服务程序
-         // RISING： 当引脚电平由低电平变为高电平时触发中断服务程序
-         // FALLING： 当引脚电平由高电平变为低电平时触发中断服务程序
-         attachInterrupt(digitalPinToInterrupt(v0), frequency_value0Add, RISING);
-         attachInterrupt(digitalPinToInterrupt(v1), frequency_value1Add, RISING);
-      }
-      else
-      {
-         detachInterrupt(v0);
-         detachInterrupt(v1);
-      }
-   }
-   void frequency_valueset0(void)
-   {
-      frequency.value[0] = 0;
-      frequency.value[1] = 0;
-   }
-   // 喇叭控制
-   typedef struct
-   {
-      int gpio;
-      bool working;
-   } laba_t;
-   laba_t laba;
-   void laba_set(bool c)
-   {
-      laba.working = c;
-      digitalWrite(laba.gpio, c ? HIGH : LOW);
-   }
-   // 警示灯
-   typedef struct
-   {
-      int gpio[2];
-      bool working;
-   } deng_t;
-   deng_t deng;
-   void deng_set(bool c)
-   {
-      deng.working = c;
-      int dengfalse_goio = deng.gpio[0];
-      int dengtrue_goio = deng.gpio[1];
-      if (c)
-      {
-         digitalWrite(dengtrue_goio, HIGH);
-         digitalWrite(dengfalse_goio, LOW);
-      }
-      else
-      {
-         digitalWrite(dengtrue_goio, LOW);
-         digitalWrite(dengfalse_goio, HIGH);
-      }
-   }
+
+   using dz003gpionamespace::eth_begin;
+   dz003gpionamespace::fa_t fa(2);
+   dz003gpionamespace::laba_t laba(16);
+   dz003gpionamespace::deng_t deng(12, 14);
+   dz003gpionamespace::frequency_t frequency(34, 35);
 
    // 初始化工作状态
    void work_set(bool c)
    {
-      if (c)
-      {
-         fa.gpio = 2;
-         laba.gpio = 16;
-         frequency.gpio[0] = 34;
-         frequency.gpio[1] = 35;
-         deng.gpio[0] = 12;
-         deng.gpio[1] = 14;
-         pinMode(fa.gpio, OUTPUT);
-         pinMode(laba.gpio, OUTPUT);
-         pinMode(frequency.gpio[0], INPUT); // 初始化引脚
-         pinMode(frequency.gpio[1], INPUT);
-         pinMode(deng.gpio[0], OUTPUT);
-         pinMode(deng.gpio[1], OUTPUT);
-      }
-      frequency_valueset0();
-      fa_set(c);
-      frequency_set(c);
-      laba_set(!c);
-      deng_set(!c);
+      fa.set(c);
+      frequency.set(c);
+      laba.set(!c);
+      deng.set(!c);
    }
 
    void getState(JsonObject &obj)
@@ -201,43 +80,45 @@ namespace dz003namespace
       JsonObject c4 = obj.createNestedObject("deng");
       c4["working"] = deng.working;
       JsonArray dengread = c4.createNestedArray("digitalRead");
-      dengread.add(digitalRead(deng.gpio[0]));
-      dengread.add(digitalRead(deng.gpio[1]));
+      dengread.add(digitalRead(deng.false_goio));
+      dengread.add(digitalRead(deng.true_goio));
    }
-   
+
    void resTask(void *ptr)
    {
       taskParam_t *c = (taskParam_t *)ptr;
       TickType_t ticksCount = xTaskGetTickCount();
-      work_set(true);
-      int &v0v1abs_log = frequency.log[0];
-      v0v1abs_log = 0;
-      int &v0v1absLoop_log = frequency.log[1];
-      v0v1absLoop_log = 0;
-      int &loopNumber_log = frequency.log[2];
-      loopNumber_log = 0;
-      String sendTo;
-      int v0v1abs_c, v0v1absLoop_c, loopNumber_c, set0tick_c;
-      std::tie(sendTo, v0v1abs_c, v0v1absLoop_c, loopNumber_c, set0tick_c) = c->config;
+      int &v0v1abs_log = frequency.log[frequency.log_index.v0v1abs];
+      int &v0v1absLoop_log = frequency.log[frequency.log_index.v0v1absLoop];
+      int &loopNumber_log = frequency.log[frequency.log_index.loopNumber];
+      String &sendTo = std::get<0>(c->config);
+      int &v0v1abs_c = std::get<1>(c->config);
+      int &v0v1absLoop_c = std::get<2>(c->config);
+      int &loopNumber_c = std::get<3>(c->config);
+      int &set0tick_c = std::get<4>(c->config);
       ESP_LOGV("DZ003", "SUCCESS");
       c->startCallback();
+      work_set(true);
       while (1)
       {
          loopNumber_log += 1;
          v0v1abs_log = abs(frequency.value[0] - frequency.value[1]);
          v0v1absLoop_log += v0v1abs_log;
-         if (v0v1abs_log > v0v1abs_c || v0v1absLoop_log > v0v1abs_c)
+         if (v0v1abs_log > v0v1abs_c || v0v1abs_log > v0v1absLoop_c || v0v1absLoop_log > v0v1absLoop_c)
          {
             work_set(false);
          }
-         myStruct_t obj = {
-             .sendTo_name = sendTo,
-             .str = "[\"mcu_dz003State_get\"]"};
-         if (xQueueSend(c->parseStringQueueHandle, &obj, 0) != pdPASS)
+         if (sendTo)
          {
-            ESP_LOGV("DZ003", "Queue is full");
+            myStruct_t obj = {
+                .sendTo_name = sendTo,
+                .str = "[\"mcu_dz003State_get\"]"};
+            if (xQueueSend(c->parseStringQueueHandle, &obj, 0) != pdPASS)
+            {
+               ESP_LOGV("DZ003", "Queue is full");
+            }
          }
-         frequency_valueset0();
+         frequency.valueset0();
          if (loopNumber_log > loopNumber_c)
          {
             loopNumber_log = 0;
