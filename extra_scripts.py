@@ -7,7 +7,7 @@ toDir=os.path.abspath(PROJECT_DIR+"/data")
 os.chdir("../d6227-mcu-ts")
 print("当前：",os.getcwd())
 try:
-    cmd=f"esno src/scriptGetData.ts --mode={PIOENV} --toDir={toDir}"
+    cmd=f"esno src/storeScript.ts --mode={PIOENV} --toDir={toDir}"
     # os.system(cmd)
     env.Execute(cmd)
 except Exception as e:
