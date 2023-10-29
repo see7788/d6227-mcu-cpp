@@ -51,13 +51,15 @@ struct state_t
   QueueHandle_t sendToQueueHandle;
   QueueHandle_t parseStringQueueHandle;
   // TaskHandle_t parseStringTaskHandle;
-  MyFs *mcu_configFs;
+  MyFs *configFs;
+  MyFs *stateI18n_cnFs;
+  MyFs *stateI18nKey_cnFs;
   MyNet *mcu_net;
   HardwareSerial *mcu_serial;
   dz003namespace::taskParam_t *mcu_dz003TaskParam;
   a7129namespace::taskParam_t *mcu_yblTaskParam;
 } state;
-//logname std::get<4>(config.mcu_base)
+// logname std::get<4>(config.mcu_base)
 void esp_eg_on(void *registEr, esp_event_base_t postEr, int32_t eventId, void *eventData)
 {
   // EventBits_t bits = xEventGroupWaitBits(state.eg_Handle, EGBIG_NET | EGBIG_NET , pdFALSE, pdTRUE, portMAX_DELAY);
@@ -220,7 +222,7 @@ void parseJsonArray(JsonArray arr, myStruct_t myStruct)
       arr.add("config_set");
       JsonObject obj = arr.createNestedObject();
       config_get(obj);
-      bool success = state.mcu_configFs->writeFile(obj);
+      bool success = state.configFs->writeFile(obj);
       if (!success)
       {
         return;
@@ -231,7 +233,7 @@ void parseJsonArray(JsonArray arr, myStruct_t myStruct)
       arr.clear();
       arr.add("config_set");
       JsonObject obj = arr.createNestedObject();
-      bool success = state.mcu_configFs->readFile(obj);
+      bool success = state.configFs->readFile(obj);
       if (!success)
       {
         return;
@@ -366,10 +368,10 @@ void initConfig(std::function<void(void)> startCallback)
 {
 
   StaticJsonDocument<2000> doc;
-  state.mcu_configFs->readFile(doc);     // 与下行代码交换位置，会不正常
+  state.configFs->readFile(doc);         // 与下行代码交换位置，会不正常
   JsonObject obj = doc.as<JsonObject>(); // 这里用doc.to，也不正常
   // JsonObject obj = doc.to<JsonObject>();
-  // state.mcu_configFs->readFile(obj);
+  // state.configFs->readFile(obj);
   config_set(obj);
   obj["t"] = "readFile config_set";
   obj["testindex"] = state.testindex++;
@@ -392,6 +394,10 @@ void initConfig(std::function<void(void)> startCallback)
   // printf("%s", pbuffer);
   // printf("----------------------------------------------\r\n");
   // free(pbuffer);
+
+  // initConfig([]()
+  //            { xEventGroupSetBits(state.eg_Handle, EGBIG_CONFIG); });
+  // xEventGroupWaitBits(state.eg_Handle, EGBIG_CONFIG, pdFALSE, pdTRUE, portMAX_DELAY);
 }
 
 void setup(void)
@@ -404,8 +410,8 @@ void setup(void)
   state.parseStringQueueHandle = xQueueCreate(10, sizeof(myStruct_t));
   state.mcu_serial = &Serial;
   state.mcu_serial->begin(115200);
-  state.mcu_configFs = new MyFs("/config.json");
-  // state.mcu_configFs->listFilePrint("/", 3);
+
+  // state.configFs->listFilePrint("/", 3);
   ESP_ERROR_CHECK(esp_task_wdt_init(20000, false)); // 初始化看门狗
   ESP_ERROR_CHECK(esp_task_wdt_add(NULL));
   ESP_ERROR_CHECK(esp_task_wdt_status(NULL));
@@ -417,11 +423,55 @@ void setup(void)
   ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, ESP_EVENT_ANY_ID, esp_eg_on, (void *)__func__));
   ESP_ERROR_CHECK(esp_event_handler_register(ETH_EVENT, ESP_EVENT_ANY_ID, esp_eg_on, (void *)__func__));
   ESP_ERROR_CHECK(esp_event_handler_register(SC_EVENT, ESP_EVENT_ANY_ID, esp_eg_on, (void *)__func__));
+  StaticJsonDocument<2000> doc;
+  state.configFs = new MyFs("/config.json");
+  state.stateI18n_cnFs = new MyFs("/i18n_cn.json");
+  state.stateI18nKey_cnFs = new MyFs("/i18nkey_cn.json");
+  // state.configFs->listFilePrint("/", 5);
+  state.configFs->readFile(doc);         // 与下行代码交换位置，会不正常
+  JsonObject obj = doc.as<JsonObject>(); // 这里用doc.to，也不正常
+  config_set(obj);
+  xEventGroupSetBits(state.eg_Handle, EGBIG_CONFIG);
+  obj["t"] = "config.json";
+  obj["testindex"] = state.testindex++;
+  serializeJson(obj, *state.mcu_serial);
+  ESP_LOGV("getFreeHeap", "%d", ESP.getFreeHeap());
+  obj.clear();
+  obj["t"] = "config_get";
+  obj["testindex"] = state.testindex++;
+  config_get(obj);
+  serializeJson(obj, *state.mcu_serial);
+  ESP_LOGV("getFreeHeap", "%d", ESP.getFreeHeap());
 
-  initConfig([]()
-             { xEventGroupSetBits(state.eg_Handle, EGBIG_CONFIG); });
+  // doc.clear();
+  // state.stateI18n_cnFs->readFile(doc);
+  // doc["t"] = "i18n_cn.json";
+  // doc["testindex"] = state.testindex++;
+  // serializeJson(doc, *state.mcu_serial);
+  // ESP_LOGV("getFreeHeap", "%d", ESP.getFreeHeap());
+
+  // doc.clear();
+  // state.stateI18nKey_cnFs->readFile(doc);
+  // doc["t"] = "i18nkey_cn.json";
+  // doc["testindex"] = state.testindex++;
+  // serializeJson(doc, *state.mcu_serial);
+  // ESP_LOGV("getFreeHeap", "%d", ESP.getFreeHeap());
+
+  obj.clear();
+  obj["t"] = "i18n_cn.json";
+  obj["testindex"] = state.testindex++;
+  state.stateI18n_cnFs->readFile(obj);
+  serializeJson(obj, *state.mcu_serial);
+  ESP_LOGV("getFreeHeap", "%d", ESP.getFreeHeap());
+
+  obj.clear();
+  obj["t"] = "i18nkey_cn.json";
+  obj["testindex"] = state.testindex++;
+  state.stateI18nKey_cnFs->readFile(obj);
+  serializeJson(obj, *state.mcu_serial);
+  ESP_LOGV("getFreeHeap", "%d", ESP.getFreeHeap());
+
   xEventGroupWaitBits(state.eg_Handle, EGBIG_CONFIG, pdFALSE, pdTRUE, portMAX_DELAY);
-
   state.mcu_serial->begin(std::get<1>(config.mcu_serial));
   state.mcu_serial->onReceive(mcu_serial_callback);
 

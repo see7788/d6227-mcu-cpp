@@ -8,6 +8,23 @@ class MyFs
 {
 private:
     const char *path;
+    void merge(JsonVariant dst, JsonVariantConst src)
+    {
+        if (src.is<JsonObjectConst>())
+        {
+            for (JsonPairConst kvp : src.as<JsonObjectConst>())
+            {
+                if (dst[kvp.key()])
+                    merge(dst[kvp.key()], kvp.value());
+                else
+                    dst[kvp.key()] = kvp.value();
+            }
+        }
+        else
+        {
+            dst.set(src);
+        }
+    }
 
 public:
     bool begin_bool;
@@ -78,17 +95,16 @@ public:
             ESP_LOGE("", "error %s", error.c_str());
             return false;
         }
-        // serializeJson(doc, Serial);
-        // ESP_LOGV("", "");
         return true;
     }
-    bool readFile(JsonObject obj)
+    bool readFile(JsonVariant obj)
     {
         StaticJsonDocument<2000> doc;
         bool c = readFile(doc);
         if (c)
         {
-            obj.set(doc.as<JsonObject>());
+            //obj.set(doc.as<JsonObject>());
+            merge(obj,doc);
         }
         return c;
     }
