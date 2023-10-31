@@ -10,7 +10,7 @@ private:
     const char *path;
     void merge(JsonVariant dst, JsonVariantConst src)
     {
-        if (src.is<JsonObjectConst>())
+        if (src.is<JsonObject>())
         {
             for (JsonPairConst kvp : src.as<JsonObjectConst>())
             {
@@ -99,16 +99,19 @@ public:
     }
     bool readFile(JsonVariant obj)
     {
-        StaticJsonDocument<2000> doc;
+        // StaticJsonDocument<2000> doc;
+        DynamicJsonDocument doc(2000);
+        // ESP_LOGV("", " %i", doc.capacity());
         bool c = readFile(doc);
         if (c)
         {
-            //obj.set(doc.as<JsonObject>());
-            merge(obj,doc);
+            merge(obj, doc);
+        }else{
+            ESP_LOGE("", " %s", "readFile(doc) error");
         }
         return c;
     }
-    bool writeFile(JsonObject obj)
+    bool writeFile(JsonVariant obj)
     {
         if (!this->file_bool)
         {

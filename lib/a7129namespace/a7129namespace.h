@@ -637,7 +637,7 @@ namespace a7129namespace
     typedef std::vector<id_t> useIds_t;
     useIds_t useIds;
     // sendTo_name,id白名单
-    typedef std::tuple<String, useIds_t,String> config_t;
+    typedef std::tuple<String, useIds_t> config_t;
     int devMaxIndex = 0;
     void yblInterrupt(void)
     {

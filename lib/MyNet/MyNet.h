@@ -9,13 +9,13 @@ public:
     typedef String type_t; //""| "ap" | "sta" | "eth" | "ap+sta" | "ap+eth"
     typedef std::tuple<String> ap_t;
     typedef std::tuple<String, String> sta_t;
-    typedef std::tuple<String, ap_t, sta_t, String> config_t;
+    typedef std::tuple<String, ap_t, sta_t> config_t;
     MyNet(config_t &config)
     {
         type_t uset;
         ap_t ap;
         sta_t sta;
-        std::tie(uset, ap, sta, std::ignore) = config;
+        std::tie(uset, ap, sta) = config;
         if (uset == "ap")
         {
             WiFi.mode(WIFI_AP);

@@ -1,1 +1,1 @@
-{"mcu_base":["d6227-mcu-ts","0.0.0","mode_mcu00","芯片","mcu_serial"],"mcu_serial":["mcu_serial",115200,"串口"],"mcu_net":["eth",["apname"],["shuzijia","80508833"],"网络"],"mcu_ybl":["mcu_serial",[],"动能传感"],"mcu_dz003":["mcu_serial",1000,100000,1000,5000,"水阀"]}
+{"mcu_base":["d6227-mcu-ts","0.0.0","mode_mcu00","mcu_serial"],"mcu_serial":["mcu_serial",115200],"mcu_net":["eth",["apname"],["shuzijia","80508833"]],"mcu_ybl":["mcu_serial",[]],"mcu_dz003":["mcu_serial",1000,100000,1000,5000]}

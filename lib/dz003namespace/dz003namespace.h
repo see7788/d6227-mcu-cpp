@@ -30,7 +30,7 @@ memset(&data,0,sizeof(data));
 */
 namespace dz003namespace
 {
-   typedef std::tuple<String, int, int, int, int,String> config_t; // sendTo_name,v0v1abs_c，v0v1absLoop_c，loopNumber_c，set0tick_c
+   typedef std::tuple<String, int, int, int, int> config_t; // sendTo_name,v0v1abs_c，v0v1absLoop_c，loopNumber_c，set0tick_c
    typedef struct
    {
       config_t &config;
