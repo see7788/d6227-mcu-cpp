@@ -69,21 +69,22 @@ namespace dz003gpionamespace
         }
     };
     // 脉冲控制//逆向水应该不支持
-    typedef int frequencyvalue_namespaceprive_t[2];
-    frequencyvalue_namespaceprive_t frequencyvalue_namespaceprive;
+    int frequencyvalue0;
+    int frequencyvalue1;
     void frequencyvalue0_add(void)
     {
-        frequencyvalue_namespaceprive[0] += 1;
+        frequencyvalue0 += 1;
     }
     void frequencyvalue1_add(void)
     {
-        frequencyvalue_namespaceprive[1] += 1;
+        frequencyvalue1 += 1;
     }
     struct frequency_t
     {
         int gpio[2];
         bool working;
-        frequencyvalue_namespaceprive_t &value = frequencyvalue_namespaceprive;
+        int &value0 = frequencyvalue0;
+        int &value1 = frequencyvalue1;
         int log[3];
         struct
         {
@@ -118,8 +119,8 @@ namespace dz003gpionamespace
         }
         void valueset0(void)
         {
-            value[0] = 0;
-            value[1] = 0;
+            value0 = 0;
+            value1 = 0;
         }
         frequency_t(int c0, int c1)
         {

@@ -47,8 +47,8 @@ struct state_t
   unsigned int testindex;
   EventGroupHandle_t eg_Handle;
   SemaphoreHandle_t configLock;
-  QueueHandle_t sendToQueueHandle;
-  QueueHandle_t parseStringQueueHandle;
+  QueueHandle_t reqQueueHandle;
+  QueueHandle_t resQueueHandle;
   MyFs *configFs;
   MyFs *i18nkFs;
   MyFs *i18nvFs;
@@ -87,6 +87,16 @@ void esp_eg_on(void *registEr, esp_event_base_t postEr, int32_t eventId, void *e
   // char *data = eventData ? ((char *)eventData) : ((char *)"");
   // ESP_LOGD("DEBUG", "registEr:%s,use:%d,postEr:%s, eventId:%d,eventData:%s", er, use, postEr, eventId, (char *)eventData);
   ESP_LOGD("esp_eg_on", "registEr:%s,use:%d,postEr:%s, eventId:%d", er, use, postEr, eventId);
+}
+void mcu_serial_callback(void)
+{
+  myStruct_t myStruct = {
+      .sendTo_name = std::get<0>(config.mcu_serial),
+      .str = state.mcu_serial->readStringUntil('\n')};
+  if (xQueueSendFromISR(state.resQueueHandle, &myStruct, 0) != pdPASS)
+  {
+    ESP_LOGE("mcu_serial_callback", "resQueueHandle is full");
+  }
 }
 void config_set(JsonVariant obj)
 {
@@ -159,204 +169,194 @@ void config_get(JsonVariant obj)
       mcu_ybluseIds.add(element);
   }
 }
-void parseJsonArray(JsonVariant arr, myStruct_t myStruct)
-{
-  String api = arr[0].as<String>();
-  if (xSemaphoreTake(state.configLock, portMAX_DELAY) == pdTRUE)
-  {
-    if (api == "init_get")
-    {
-      arr.clear();
-      arr.add("set");
-      JsonObject obj = arr.createNestedObject();
-      config_get(obj);
-      JsonArray mcu_state = obj.createNestedArray("mcu_state");
-      uint32_t ulBits = xEventGroupGetBits(state.eg_Handle); // 获取 Event Group 变量当前值
-      mcu_state.add(state.macId);
-      JsonArray egBit = mcu_state.createNestedArray();
-      for (int i = sizeof(ulBits) * 8 - 1; i >= 0; i--)
-      { // 循环输出每个二进制位
-        uint32_t mask = 1 << i;
-        if (ulBits & mask)
-        {
-          egBit.add(true);
-        }
-        else
-        {
-          egBit.add(false);
-        }
-      }
-      mcu_state.add(state.locIp);
-      mcu_state.add(state.taskindex);
-      JsonObject i18n = obj.createNestedObject("i18n");
-      JsonArray cn = i18n.createNestedArray("cn");
-      JsonVariant cnk = cn.createNestedObject();
-      JsonVariant cnv = cn.createNestedObject();
-      state.i18nkFs->readFile(cnk);
-      state.i18nvFs->readFile(cnv);
-    }
-    else if (api == "config_set")
-    {
-      JsonObject obj = arr[1].as<JsonObject>();
-      config_set(obj);
-    }
-    else if (api == "config_get")
-    {
-      arr.clear();
-      arr.add("config_set");
-      JsonObject obj = arr.createNestedObject();
-      config_get(obj);
-    }
-    else if (api == "config_toFile")
-    {
-      arr.clear();
-      arr.add("config_set");
-      JsonObject obj = arr.createNestedObject();
-      config_get(obj);
-      bool success = state.configFs->writeFile(obj);
-      if (!success)
-      {
-        return;
-      }
-    }
-    else if (api == "config_fromFile")
-    {
-      arr.clear();
-      arr.add("config_set");
-      JsonObject obj = arr.createNestedObject();
-      bool success = state.configFs->readFile(obj);
-      if (!success)
-      {
-        return;
-      }
-      config_set(obj);
-    }
-    else if (api == "restart")
-    {
-      ESP.restart();
-    }
-    else if (api.indexOf("mcu_dz003") > -1)
-    {
-      if (api == "mcu_dz003.fa_set")
-      {
-        dz003namespace::fa.set(arr[1].as<bool>());
-      }
-      else if (api == "mcu_dz003.frequency_set")
-      {
-        dz003namespace::frequency.set(arr[1].as<bool>());
-      }
-      else if (api == "mcu_dz003.laba_set")
-      {
-        dz003namespace::laba.set(arr[1].as<bool>());
-      }
-      else if (api == "mcu_dz003.deng_set")
-      {
-        dz003namespace::deng.set(arr[1].as<bool>());
-      }
-      arr.clear();
-      arr[0].set("set");
-      JsonObject obj = arr.createNestedObject();
-      JsonObject data = obj.createNestedObject("mcu_dz003State");
-      dz003namespace::getState(data);
-    }
-    else
-    {
-      arr[0].set("mcu pass");
-      arr[1].set(api);
-    }
-    xSemaphoreGive(state.configLock);
-    serializeJson(arr, myStruct.str);
-    // state.mcu_serial->println(myStruct.str);
-    if (xQueueSend(state.sendToQueueHandle, &myStruct, 0) != pdPASS)
-    {
-      ESP_LOGE("parseJsonArray", "sendToQueueHandle is full");
-    }
-  }
-  else
-  {
-    ESP_LOGE("parseJsonArray", "xSemaphoreTake !=pdFALSE");
-  }
-}
-void sendToTask(void *nullparam)
+
+void reqTask(void *nullparam)
 {
   myStruct_t myStruct;
   for (;;)
   {
-    if (xQueueReceive(state.sendToQueueHandle, &myStruct, portMAX_DELAY) == pdPASS)
+    if (xQueueReceive(state.reqQueueHandle, &myStruct, portMAX_DELAY) == pdPASS)
     {
       if (myStruct.sendTo_name == "mcu_serial")
       {
         state.mcu_serial->println(myStruct.str);
-        vTaskDelay(50);
       }
       else
       {
         myStruct.str = String("[\"sendTo_name undefind\",\"") + myStruct.str + String("\"]");
         state.mcu_serial->println(myStruct.str);
-        vTaskDelay(50);
       }
+      vTaskDelay(50);
     }
     else
     {
-      ESP_LOGD("sendToTask", "xQueueReceive != pdPASS");
+      ESP_LOGD("reqTask", "xQueueReceive != pdPASS");
     }
   }
 }
-void parseStringTask(void *nullparam)
+void resTask(void *nullparam)
 {
   // uint32_t ptr;
-  myStruct_t myStruct;
+  myStruct_t resStruct;
   for (;;)
   {
     // if (xTaskNotifyWait(pdFALSE, ULONG_MAX, (uint32_t *)&ptr, portMAX_DELAY) == pdPASS)
     // {
     //  myStruct = *(structTypenamespace::myJsonArray_t *)ptr;
-    if (xQueueReceive(state.parseStringQueueHandle, &myStruct, portMAX_DELAY) == pdPASS)
+    if (xQueueReceive(state.resQueueHandle, &resStruct, portMAX_DELAY) == pdPASS)
     {
-      DynamicJsonDocument doc(3000);
-      DeserializationError error = deserializeJson(doc, myStruct.str);
+      StaticJsonDocument<2000> resdoc;
+      // DynamicJsonDocument resdoc(2000);
+      DeserializationError error = deserializeJson(resdoc, resStruct.str);
       if (error)
       {
-        myStruct.sendTo_name = std::get<3>(config.mcu_base);
-        myStruct.str = "[\"parseStringTask error\",\"" + String(error.c_str()) + "\",\"" + myStruct.str + "\"]";
-        if (xQueueSend(state.sendToQueueHandle, &myStruct, 0) != pdPASS)
+        resStruct.sendTo_name = std::get<3>(config.mcu_base);
+        resStruct.str = "[\"resTask error\",\"" + String(error.c_str()) + "\",\"" + resStruct.str + "\"]";
+        if (xQueueSend(state.reqQueueHandle, &resStruct, 0) != pdPASS)
         {
-          ESP_LOGD("parseStringTask", "sendToQueueHandle is full");
+          ESP_LOGD("resTask", "reqQueueHandle is full");
         }
       }
       else
       {
-        myStruct.str.clear();
-        JsonVariant jsonarray = doc.as<JsonVariant>();
-        parseJsonArray(jsonarray, myStruct);
+        // JsonVariant arr = resdoc.as<JsonVariant>();
+        // resJsonArray(arr, resStruct);
+        JsonArray arr = resdoc.as<JsonArray>();
+        String api = arr[0].as<String>();
+        if (xSemaphoreTake(state.configLock, portMAX_DELAY) == pdTRUE)
+        {
+          if (api == "init_get")
+          {
+            arr.clear();
+            arr.add("set");
+            JsonObject obj = arr.createNestedObject();
+            config_get(obj);
+            JsonArray mcu_state = obj.createNestedArray("mcu_state");
+            uint32_t ulBits = xEventGroupGetBits(state.eg_Handle); // 获取 Event Group 变量当前值
+            mcu_state.add(state.macId);
+            JsonArray egBit = mcu_state.createNestedArray();
+            for (int i = sizeof(ulBits) * 8 - 1; i >= 0; i--)
+            { // 循环输出每个二进制位
+              uint32_t mask = 1 << i;
+              if (ulBits & mask)
+              {
+                egBit.add(true);
+              }
+              else
+              {
+                egBit.add(false);
+              }
+            }
+            mcu_state.add(state.locIp);
+            mcu_state.add(state.taskindex);
+            JsonObject i18n = obj.createNestedObject("i18n");
+            JsonArray cn = i18n.createNestedArray("cn");
+            JsonVariant cnk = cn.createNestedObject();
+            JsonVariant cnv = cn.createNestedObject();
+            state.i18nkFs->readFile(cnk);
+            state.i18nvFs->readFile(cnv);
+          }
+          else if (api == "config_set")
+          {
+            JsonObject obj = arr[1].as<JsonObject>();
+            config_set(obj);
+          }
+          else if (api == "config_get")
+          {
+            arr.clear();
+            arr.add("config_set");
+            JsonObject obj = arr.createNestedObject();
+            config_get(obj);
+          }
+          else if (api == "config_toFile")
+          {
+            arr.clear();
+            arr.add("config_set");
+            JsonObject obj = arr.createNestedObject();
+            config_get(obj);
+            bool success = state.configFs->writeFile(obj);
+            if (!success)
+            {
+              return;
+            }
+          }
+          else if (api == "config_fromFile")
+          {
+            arr.clear();
+            arr.add("config_set");
+            JsonObject obj = arr.createNestedObject();
+            bool success = state.configFs->readFile(obj);
+            if (!success)
+            {
+              return;
+            }
+            config_set(obj);
+          }
+          else if (api == "restart")
+          {
+            ESP.restart();
+          }
+          else if (api.indexOf("mcu_dz003") > -1)
+          {
+            if (api == "mcu_dz003.fa_set")
+            {
+              dz003namespace::obj->fa.set(arr[1].as<bool>());
+            }
+            else if (api == "mcu_dz003.frequency_set")
+            {
+              dz003namespace::obj->frequency.set(arr[1].as<bool>());
+            }
+            else if (api == "mcu_dz003.laba_set")
+            {
+              dz003namespace::obj->laba.set(arr[1].as<bool>());
+            }
+            else if (api == "mcu_dz003.deng_set")
+            {
+              dz003namespace::obj->deng.set(arr[1].as<bool>());
+            }
+            arr.clear();
+            arr[0].set("set");
+            JsonObject obj = arr.createNestedObject();
+            JsonObject dz003State = obj.createNestedObject("mcu_dz003State");
+            dz003namespace::obj->getState(dz003State);
+            // dz003State["taskindex"] = state.taskindex++;
+          }
+          else
+          {
+            arr[0].set("mcu pass");
+            arr[1].set(api);
+          }
+          xSemaphoreGive(state.configLock);
+          myStruct_t reqStruct;
+          reqStruct.sendTo_name=resStruct.sendTo_name;
+          serializeJson(arr, reqStruct.str);
+          if (xQueueSend(state.reqQueueHandle, &reqStruct, 0) != pdPASS)
+          {
+            ESP_LOGE("resJsonArray", "reqQueueHandle is full");
+          }
+        }
+        else
+        {
+          ESP_LOGE("resJsonArray", "xSemaphoreTake !=pdFALSE");
+        }
       }
     }
     else
     {
-      ESP_LOGD("parseStringTask", "parseStringTask xQueueReceive != pdPASS");
+      ESP_LOGD("resTask", "resTask xQueueReceive != pdPASS");
     }
   }
 }
-void mcu_serial_callback(void)
-{
-  myStruct_t myStruct = {
-      .sendTo_name = std::get<0>(config.mcu_serial),
-      .str = state.mcu_serial->readStringUntil('\n')};
-  if (xQueueSendFromISR(state.parseStringQueueHandle, &myStruct, 0) != pdPASS)
-  {
-    ESP_LOGE("mcu_serial_callback", "parseStringQueueHandle is full");
-  }
-}
 
-void setup(void)
+void setup()
 {
   Serial.begin(115200);
   state.macId = String(ESP.getEfuseMac());
   state.testindex = 0;
   state.eg_Handle = xEventGroupCreate();
   state.configLock = xSemaphoreCreateMutex();
-  state.sendToQueueHandle = xQueueCreate(10, sizeof(myStruct_t));
-  state.parseStringQueueHandle = xQueueCreate(10, sizeof(myStruct_t));
+  state.reqQueueHandle = xQueueCreate(10, sizeof(myStruct_t));
+  state.resQueueHandle = xQueueCreate(10, sizeof(myStruct_t));
   state.mcu_serial = &Serial;
   // state.configFs->listFilePrint("/", 3);
   ESP_ERROR_CHECK(esp_task_wdt_init(20000, false)); // 初始化看门狗
@@ -411,7 +411,7 @@ void setup(void)
 
   state.mcu_yblTaskParam = new a7129namespace::taskParam_t{
       .config = config.mcu_ybl,
-      .parseStringQueueHandle = state.parseStringQueueHandle,
+      .queueHandle = state.resQueueHandle,
       .startCallback = []()
       {
         xEventGroupSetBits(state.eg_Handle, EGBIG_YBL);
@@ -421,7 +421,7 @@ void setup(void)
 
   state.mcu_dz003TaskParam = new dz003namespace::taskParam_t{
       .config = config.mcu_dz003,
-      .parseStringQueueHandle = state.parseStringQueueHandle,
+      .queueHandle = state.resQueueHandle,
       .startCallback = []()
       {
         xEventGroupSetBits(state.eg_Handle, EGBIG_DZ003);
@@ -429,13 +429,12 @@ void setup(void)
   xTaskCreate(dz003namespace::resTask, "mcu_dz003Task", 1024 * 6, (void *)state.mcu_dz003TaskParam, state.taskindex++, NULL);
   xEventGroupWaitBits(state.eg_Handle, EGBIG_DZ003, pdFALSE, pdTRUE, portMAX_DELAY);
 
-  xTaskCreate(parseStringTask, "parseStringTask", 1024 * 10, NULL, state.taskindex++, NULL);
+  xTaskCreate(resTask, "resTask", 1024 * 12, NULL, state.taskindex++, NULL);
 
-  xTaskCreate(sendToTask, "sendToTask", 1024 * 4, NULL, state.taskindex++, NULL);
+  xTaskCreate(reqTask, "reqTask", 1024 * 4, NULL, state.taskindex++, NULL);
 
   vTaskDelete(NULL);
 }
-
 void loop(void)
 {
 }

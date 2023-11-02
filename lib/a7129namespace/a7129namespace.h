@@ -723,7 +723,7 @@ namespace a7129namespace
     {
         config_t &config;
         // TaskHandle_t &notifyTaskHandle;
-        QueueHandle_t &parseStringQueueHandle;
+        QueueHandle_t &queueHandle;
         std::function<void(void)> startCallback;
     } taskParam_t;
     void yblResTask(void *ptr)
@@ -756,14 +756,14 @@ namespace a7129namespace
                     .sendTo_name = sendTo,
                     .str = "[\"ybl.State\"]"};
                 // xTaskNotify(c->notifyTaskHandle, (uint32_t)obj, eSetValueWithOverwrite);
-                if (xQueueSend(c->parseStringQueueHandle, &obj, 0) != pdPASS)
+                if (xQueueSend(c->queueHandle, &obj, 0) != pdPASS)
                 {
                     ESP_LOGV("A7129", "Queue is full");
                 }
                 interrupt_state = 0;
             }
             // yblSend(dev[0]);
-            vTaskDelay(3000);
+            vTaskDelay(pdMS_TO_TICKS(3000));
         }
     }
 };
