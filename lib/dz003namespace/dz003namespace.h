@@ -31,12 +31,6 @@ memset(&data,0,sizeof(data));
 namespace dz003namespace
 {
    typedef std::tuple<String, int, int, int, int> config_t; // sendTo_name,v0v1abs_c，v0v1absLoop_c，loopNumber_c，set0tick_c
-   typedef struct
-   {
-      config_t &config;
-      QueueHandle_t &queueHandle;
-      std::function<void(void)> startCallback;
-   } taskParam_t;
 
    using dz003gpionamespace::eth_begin;
    class Dz003Class
@@ -84,14 +78,74 @@ namespace dz003namespace
          dengread.add(digitalRead(deng.false_goio));
          dengread.add(digitalRead(deng.true_goio));
       }
+      //[api,bool]
+      void res(JsonVariant arr)
+      {
+         String api = arr[0].as<String>();
+         if (api == "mcu_dz003.fa_set")
+         {
+            fa.set(arr[1].as<bool>());
+         }
+         else if (api == "mcu_dz003.frequency_set")
+         {
+            frequency.set(arr[1].as<bool>());
+         }
+         else if (api == "mcu_dz003.laba_set")
+         {
+            laba.set(arr[1].as<bool>());
+         }
+         else if (api == "mcu_dz003.deng_set")
+         {
+            deng.set(arr[1].as<bool>());
+         }
+      }
    };
-   Dz003Class *obj;
-
+   typedef struct
+   {
+      config_t &config;
+      QueueHandle_t &queueHandle;
+      Dz003Class obj;
+      std::function<void(void)> startCallback;
+   } taskParam_t;
+   void looptask(void *ptr)
+   {
+      TickType_t ticksCount = xTaskGetTickCount();
+      taskParam_t *c = (taskParam_t *)ptr;
+      Dz003Class *obj = &c->obj;
+      String &sendTo = std::get<0>(c->config);
+      int &abs_c = std::get<1>(c->config);
+      int &loopAbs_c = std::get<2>(c->config);
+      int &loopNumber_c = std::get<3>(c->config);
+      int &abs_log = obj->frequency.log[obj->frequency.log_index.v0v1abs];
+      int &absLoop_log = obj->frequency.log[obj->frequency.log_index.v0v1absLoop];
+      int &loopNumber_log = obj->frequency.log[obj->frequency.log_index.loopNumber];
+      int &tick_c = std::get<4>(c->config);
+      c->startCallback();
+      for (;;)
+      {
+         loopNumber_log++;
+         abs_log = abs(obj->frequency.value0 - obj->frequency.value1);
+         if (abs_log >= abs_c)
+         {
+            obj->work_set(false);
+         }
+         myStruct_t data = {
+             .sendTo_name = sendTo,
+             .str = "[\"mcu_dz003State_get\"]"};
+         if (xQueueSend(c->queueHandle, &data, 0) != pdPASS)
+         {
+            ESP_LOGV("DZ003", "Queue is full");
+         }
+         obj->frequency.valueset0();
+         vTaskDelayUntil(&ticksCount, pdMS_TO_TICKS(tick_c));
+      }
+   }
+   // 这个不能用，不知道为什么
    void resTask(void *ptr)
    {
       taskParam_t *c = (taskParam_t *)ptr;
+      Dz003Class *obj = &c->obj;
       TickType_t ticksCount = xTaskGetTickCount();
-      obj = new Dz003Class();
       int &v0v1abs_log = obj->frequency.log[obj->frequency.log_index.v0v1abs];
       int &v0v1absLoop_log = obj->frequency.log[obj->frequency.log_index.v0v1absLoop];
       int &loopNumber_log = obj->frequency.log[obj->frequency.log_index.loopNumber];
@@ -103,33 +157,32 @@ namespace dz003namespace
       ESP_LOGV("DZ003", "SUCCESS");
       c->startCallback();
       obj->work_set(true);
-      while (1)
+      for (;;)
       {
-         loopNumber_log += 1;
-         v0v1abs_log = abs(obj->frequency.value0 - obj->frequency.value1);
-         v0v1absLoop_log += v0v1abs_log;
-         if (v0v1abs_log > v0v1abs_c || v0v1abs_log > v0v1absLoop_c || v0v1absLoop_log > v0v1absLoop_c)
-         {
-            obj->work_set(false);
-         }
-         if (sendTo)
-         {
-            myStruct_t obj = {
-                .sendTo_name = sendTo,
-                .str = "[\"mcu_dz003State_get\"]"};
-            if (xQueueSend(c->queueHandle, &obj, 0) != pdPASS)
-            {
-               ESP_LOGV("DZ003", "Queue is full");
-            }
-         }
-         obj->frequency.valueset0();
-         if (loopNumber_log > loopNumber_c)
-         {
-            loopNumber_log = 0;
-            v0v1absLoop_log = 0;
-         }
+         // loopNumber_log += 1;
+         // v0v1abs_log = abs(obj->frequency.value0 - obj->frequency.value1);
+         // v0v1absLoop_log += v0v1abs_log;
+         // if (v0v1abs_log > v0v1abs_c || v0v1abs_log > v0v1absLoop_c || v0v1absLoop_log > v0v1absLoop_c)
+         // {
+         //    obj->work_set(false);
+         // }
+         // myStruct_t data = {
+         //     .sendTo_name = sendTo,
+         //     .str = "[\"mcu_dz003State_get\"]"};
+         // if (xQueueSend(c->queueHandle, &data, 0) != pdPASS)
+         // {
+         //    ESP_LOGV("DZ003", "Queue is full");
+         // }
+         // obj->frequency.valueset0();
+         // if (loopNumber_log > loopNumber_c)
+         // {
+         //    loopNumber_log = 0;
+         //    v0v1absLoop_log = 0;
+         // }
          vTaskDelayUntil(&ticksCount, pdMS_TO_TICKS(set0tick_c));
       }
+      ESP_LOGV("DZ003", "vTaskDelete");
+      vTaskDelete(NULL);
    }
 };
 #endif

@@ -39,6 +39,7 @@ struct config_t
   dz003namespace::config_t mcu_dz003;
   a7129namespace::config_t mcu_ybl;
 };
+config_t config;
 struct state_t
 {
   String macId;
@@ -57,7 +58,6 @@ struct state_t
   dz003namespace::taskParam_t *mcu_dz003TaskParam;
   a7129namespace::taskParam_t *mcu_yblTaskParam;
 };
-config_t config;
 state_t state;
 void esp_eg_on(void *registEr, esp_event_base_t postEr, int32_t eventId, void *eventData)
 {
@@ -169,7 +169,6 @@ void config_get(JsonVariant obj)
       mcu_ybluseIds.add(element);
   }
 }
-
 void reqTask(void *nullparam)
 {
   myStruct_t myStruct;
@@ -205,8 +204,8 @@ void resTask(void *nullparam)
     //  myStruct = *(structTypenamespace::myJsonArray_t *)ptr;
     if (xQueueReceive(state.resQueueHandle, &resStruct, portMAX_DELAY) == pdPASS)
     {
-      StaticJsonDocument<2000> resdoc;
-      // DynamicJsonDocument resdoc(2000);
+      // StaticJsonDocument<2000> resdoc;
+      DynamicJsonDocument resdoc(2000);
       DeserializationError error = deserializeJson(resdoc, resStruct.str);
       if (error)
       {
@@ -219,8 +218,6 @@ void resTask(void *nullparam)
       }
       else
       {
-        // JsonVariant arr = resdoc.as<JsonVariant>();
-        // resJsonArray(arr, resStruct);
         JsonArray arr = resdoc.as<JsonArray>();
         String api = arr[0].as<String>();
         if (xSemaphoreTake(state.configLock, portMAX_DELAY) == pdTRUE)
@@ -298,28 +295,13 @@ void resTask(void *nullparam)
           }
           else if (api.indexOf("mcu_dz003") > -1)
           {
-            if (api == "mcu_dz003.fa_set")
-            {
-              dz003namespace::obj->fa.set(arr[1].as<bool>());
-            }
-            else if (api == "mcu_dz003.frequency_set")
-            {
-              dz003namespace::obj->frequency.set(arr[1].as<bool>());
-            }
-            else if (api == "mcu_dz003.laba_set")
-            {
-              dz003namespace::obj->laba.set(arr[1].as<bool>());
-            }
-            else if (api == "mcu_dz003.deng_set")
-            {
-              dz003namespace::obj->deng.set(arr[1].as<bool>());
-            }
+            state.mcu_dz003TaskParam->obj.res(arr);
             arr.clear();
             arr[0].set("set");
             JsonObject obj = arr.createNestedObject();
             JsonObject dz003State = obj.createNestedObject("mcu_dz003State");
-            dz003namespace::obj->getState(dz003State);
-            // dz003State["taskindex"] = state.taskindex++;
+            state.mcu_dz003TaskParam->obj.getState(dz003State);
+            //  dz003State["taskindex"] = state.taskindex++;
           }
           else
           {
@@ -328,7 +310,7 @@ void resTask(void *nullparam)
           }
           xSemaphoreGive(state.configLock);
           myStruct_t reqStruct;
-          reqStruct.sendTo_name=resStruct.sendTo_name;
+          reqStruct.sendTo_name = resStruct.sendTo_name;
           serializeJson(arr, reqStruct.str);
           if (xQueueSend(state.reqQueueHandle, &reqStruct, 0) != pdPASS)
           {
@@ -422,15 +404,15 @@ void setup()
   state.mcu_dz003TaskParam = new dz003namespace::taskParam_t{
       .config = config.mcu_dz003,
       .queueHandle = state.resQueueHandle,
+      .obj = dz003namespace::Dz003Class(),
       .startCallback = []()
       {
         xEventGroupSetBits(state.eg_Handle, EGBIG_DZ003);
       }};
-  xTaskCreate(dz003namespace::resTask, "mcu_dz003Task", 1024 * 6, (void *)state.mcu_dz003TaskParam, state.taskindex++, NULL);
+  xTaskCreate(dz003namespace::looptask, "mcu_dz003Tasklooptask", 1024 * 6, (void *)state.mcu_dz003TaskParam, state.taskindex++, NULL);
   xEventGroupWaitBits(state.eg_Handle, EGBIG_DZ003, pdFALSE, pdTRUE, portMAX_DELAY);
 
-  xTaskCreate(resTask, "resTask", 1024 * 12, NULL, state.taskindex++, NULL);
-
+  xTaskCreate(resTask, "resTask", 1024 * 8, NULL, state.taskindex++, NULL);
   xTaskCreate(reqTask, "reqTask", 1024 * 4, NULL, state.taskindex++, NULL);
 
   vTaskDelete(NULL);
