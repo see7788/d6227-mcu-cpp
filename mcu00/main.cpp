@@ -51,8 +51,7 @@ struct state_t
   QueueHandle_t reqQueueHandle;
   QueueHandle_t resQueueHandle;
   MyFs *configFs;
-  MyFs *i18nkFs;
-  MyFs *i18nvFs;
+  MyFs *i18n;
   MyNet *mcu_net;
   HardwareSerial *mcu_serial;
   dz003namespace::taskParam_t *mcu_dz003TaskParam;
@@ -122,7 +121,7 @@ void config_set(JsonVariant obj)
   if (obj.containsKey("mcu_dz003"))
   {
     JsonArray mcu_dz003 = obj["mcu_dz003"].as<JsonArray>();
-    config.mcu_dz003 = std::make_tuple(mcu_dz003[0].as<String>(), mcu_dz003[1].as<int>(), mcu_dz003[2].as<int>(), mcu_dz003[3].as<int>(), mcu_dz003[4].as<int>());
+    config.mcu_dz003 = std::make_tuple(mcu_dz003[0].as<int>(), mcu_dz003[1].as<int>(), mcu_dz003[2].as<int>(), mcu_dz003[3].as<int>(), mcu_dz003[4].as<String>());
   }
   if (obj.containsKey("mcu_ybl"))
   {
@@ -205,7 +204,7 @@ void resTask(void *nullparam)
     if (xQueueReceive(state.resQueueHandle, &resStruct, portMAX_DELAY) == pdPASS)
     {
       // StaticJsonDocument<2000> resdoc;
-      DynamicJsonDocument resdoc(2000);
+      DynamicJsonDocument resdoc(3000);
       DeserializationError error = deserializeJson(resdoc, resStruct.str);
       if (error)
       {
@@ -246,12 +245,8 @@ void resTask(void *nullparam)
             }
             mcu_state.add(state.locIp);
             mcu_state.add(state.taskindex);
-            JsonObject i18n = obj.createNestedObject("i18n");
-            JsonArray cn = i18n.createNestedArray("cn");
-            JsonVariant cnk = cn.createNestedObject();
-            JsonVariant cnv = cn.createNestedObject();
-            state.i18nkFs->readFile(cnk);
-            state.i18nvFs->readFile(cnv);
+            // JsonObject i18n = obj.createNestedObject("i18n");
+            // state.i18n->readFile(i18n);
           }
           else if (api == "config_set")
           {
@@ -293,14 +288,14 @@ void resTask(void *nullparam)
           {
             ESP.restart();
           }
-          else if (api.indexOf("mcu_dz003") > -1)
+          else if (api.indexOf("mcu_dz003State") > -1)
           {
             state.mcu_dz003TaskParam->obj.res(arr);
             arr.clear();
             arr[0].set("set");
             JsonObject obj = arr.createNestedObject();
-            JsonObject dz003State = obj.createNestedObject("mcu_dz003State");
-            state.mcu_dz003TaskParam->obj.getState(dz003State);
+            JsonObject mcu_dz003State=obj.createNestedObject("mcu_dz003State");
+            state.mcu_dz003TaskParam->obj.getState(mcu_dz003State);
             //  dz003State["taskindex"] = state.taskindex++;
           }
           else
@@ -329,10 +324,10 @@ void resTask(void *nullparam)
     }
   }
 }
-
 void setup()
 {
   Serial.begin(115200);
+  // noInterrupts(); // 关闭全局所有中断
   state.macId = String(ESP.getEfuseMac());
   state.testindex = 0;
   state.eg_Handle = xEventGroupCreate();
@@ -356,8 +351,7 @@ void setup()
   DynamicJsonDocument doc(2000);
   JsonVariant obj = doc.as<JsonVariant>();
   state.configFs = new MyFs("/config.json");
-  state.i18nkFs = new MyFs("/i18nk_cn.json");
-  state.i18nvFs = new MyFs("/i18nv_cn.json");
+  state.i18n = new MyFs("/i18n.json");
   state.configFs->readFile(obj); // 与下行代码交换位置，会不正常
   config_set(obj);
   obj["t"] = "config.json";
@@ -373,13 +367,7 @@ void setup()
   ESP_LOGV("getFreeHeap", "%d", ESP.getFreeHeap());
 
   doc.clear();
-  state.i18nkFs->readFile(obj);
-  obj["testindex"] = state.testindex++;
-  serializeJson(obj, *state.mcu_serial);
-  ESP_LOGV("getFreeHeap", "%d", ESP.getFreeHeap());
-
-  doc.clear();
-  state.i18nvFs->readFile(obj);
+  state.i18n->readFile(obj);
   obj["testindex"] = state.testindex++;
   serializeJson(obj, *state.mcu_serial);
   ESP_LOGV("getFreeHeap", "%d", ESP.getFreeHeap());
@@ -409,12 +397,15 @@ void setup()
       {
         xEventGroupSetBits(state.eg_Handle, EGBIG_DZ003);
       }};
-  xTaskCreate(dz003namespace::looptask, "mcu_dz003Tasklooptask", 1024 * 6, (void *)state.mcu_dz003TaskParam, state.taskindex++, NULL);
+
+  xTaskCreate(dz003namespace::looptask, "mcu_dz003Task", 1024 * 6, (void *)state.mcu_dz003TaskParam, state.taskindex++, NULL);
   xEventGroupWaitBits(state.eg_Handle, EGBIG_DZ003, pdFALSE, pdTRUE, portMAX_DELAY);
 
   xTaskCreate(resTask, "resTask", 1024 * 8, NULL, state.taskindex++, NULL);
   xTaskCreate(reqTask, "reqTask", 1024 * 4, NULL, state.taskindex++, NULL);
 
+  // interrupts(); // 打开全局所有中断
+  //  vTaskStartScheduler();//
   vTaskDelete(NULL);
 }
 void loop(void)

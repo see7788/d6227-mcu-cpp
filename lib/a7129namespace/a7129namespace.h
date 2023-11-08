@@ -639,6 +639,7 @@ namespace a7129namespace
     // sendTo_name,id白名单
     typedef std::tuple<String, useIds_t> config_t;
     int devMaxIndex = 0;
+   // void IRAM_ATTR yblInterrupt(void)
     void yblInterrupt(void)
     {
         if (send_state == 1)
