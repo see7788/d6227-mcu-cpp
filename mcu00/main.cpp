@@ -294,7 +294,7 @@ void resTask(void *nullparam)
             arr.clear();
             arr[0].set("set");
             JsonObject obj = arr.createNestedObject();
-            JsonObject mcu_dz003State=obj.createNestedObject("mcu_dz003State");
+            JsonObject mcu_dz003State = obj.createNestedObject("mcu_dz003State");
             state.mcu_dz003TaskParam->obj.getState(mcu_dz003State);
             //  dz003State["taskindex"] = state.taskindex++;
           }
@@ -306,6 +306,10 @@ void resTask(void *nullparam)
           xSemaphoreGive(state.configLock);
           myStruct_t reqStruct;
           reqStruct.sendTo_name = resStruct.sendTo_name;
+          JsonArray mcu_base = arr.createNestedArray();
+          mcu_base.add(std::get<0>(config.mcu_base));
+          mcu_base.add(std::get<1>(config.mcu_base));
+          mcu_base.add(std::get<2>(config.mcu_base));
           serializeJson(arr, reqStruct.str);
           if (xQueueSend(state.reqQueueHandle, &reqStruct, 0) != pdPASS)
           {
@@ -389,17 +393,17 @@ void setup()
   xTaskCreate(a7129namespace::yblResTask, "mcu_yblTask", 1024 * 6, (void *)state.mcu_yblTaskParam, state.taskindex++, NULL);
   xEventGroupWaitBits(state.eg_Handle, EGBIG_YBL, pdFALSE, pdTRUE, portMAX_DELAY);
 
-  state.mcu_dz003TaskParam = new dz003namespace::taskParam_t{
-      .config = config.mcu_dz003,
-      .queueHandle = state.resQueueHandle,
-      .obj = dz003namespace::Dz003Class(),
-      .startCallback = []()
-      {
-        xEventGroupSetBits(state.eg_Handle, EGBIG_DZ003);
-      }};
+  // state.mcu_dz003TaskParam = new dz003namespace::taskParam_t{
+  //     .config = config.mcu_dz003,
+  //     .queueHandle = state.resQueueHandle,
+  //     .obj = dz003namespace::Dz003Class(),
+  //     .startCallback = []()
+  //     {
+  //       xEventGroupSetBits(state.eg_Handle, EGBIG_DZ003);
+  //     }};
 
-  xTaskCreate(dz003namespace::looptask, "mcu_dz003Task", 1024 * 6, (void *)state.mcu_dz003TaskParam, state.taskindex++, NULL);
-  xEventGroupWaitBits(state.eg_Handle, EGBIG_DZ003, pdFALSE, pdTRUE, portMAX_DELAY);
+  // xTaskCreate(dz003namespace::looptask, "mcu_dz003Task", 1024 * 6, (void *)state.mcu_dz003TaskParam, state.taskindex++, NULL);
+  // xEventGroupWaitBits(state.eg_Handle, EGBIG_DZ003, pdFALSE, pdTRUE, portMAX_DELAY);
 
   xTaskCreate(resTask, "resTask", 1024 * 8, NULL, state.taskindex++, NULL);
   xTaskCreate(reqTask, "reqTask", 1024 * 4, NULL, state.taskindex++, NULL);

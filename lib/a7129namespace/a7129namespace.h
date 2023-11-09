@@ -452,7 +452,7 @@ namespace a7129namespace
         fbcf = (tmp >> 4) & 0x01;
         if (fbcf)
         {
-            ESP_LOGE("DEBUE", "%s", "");
+            ESP_LOGE("DEBUE", "fbcf", "");
         }
 
         // for check(VCO Current)
@@ -463,7 +463,7 @@ namespace a7129namespace
         //    TEST_BUFF[4] = vccf;        //测试
         if (vccf)
         {
-            ESP_LOGE("DEBUE", "%s", "");
+            ESP_LOGE("DEBUE", "vccf", "");
         }
         // RSSI Calibration procedure @STB state
         A7129_WriteReg(ADC_REG, 0x4C00); // set ADC average=64
@@ -495,7 +495,7 @@ namespace a7129namespace
         vbcf = (tmp >> 8) & 0x01;
         if (vbcf)
         {
-            ESP_LOGE("DEBUE", "%s", "");
+            ESP_LOGE("DEBUE", "vbcf", "");
         }
     }
 
@@ -740,7 +740,6 @@ namespace a7129namespace
         StrobeCMD(CMD_RX); // 设为接收模式
         pinMode(GIO1, INPUT_PULLUP);
         attachInterrupt(GIO1, yblInterrupt, FALLING); // 创建中断
-        ESP_LOGV("A7129", "SUCCESS");
         c->startCallback();
         while (1)
         {
