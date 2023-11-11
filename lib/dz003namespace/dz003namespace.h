@@ -2,6 +2,7 @@
 #define dz003namespace_h
 #include <ETH.h> //引用以使用ETH
 #include <Arduino.h>
+#include <functional>
 #include <tuple>
 #define ETH_ADDR 1
 #define ETH_POWER_PIN -1
@@ -191,14 +192,15 @@ namespace dz003namespace
     typedef struct
     {
         config_t &config;
-        QueueHandle_t &queueHandle;
         Dz003Class obj;
+        // QueueHandle_t &myStructQueueHandle;
         std::function<void(void)> startCallback;
-    } taskParam_t;
-    void looptask(void *ptr)
+        std::function<void(void)> tickCallBack;
+    } mainTaskParam_t;
+    void mainTask(void *ptr)
     {
-        TickType_t ticksCount = xTaskGetTickCount();
-        taskParam_t *c = (taskParam_t *)ptr;
+        TickType_t tickCount = xTaskGetTickCount();
+        mainTaskParam_t *c = (mainTaskParam_t *)ptr;
         Dz003Class *obj = &c->obj;
         int &log_0 = obj->frequency.log[0];
         int &log_1 = obj->frequency.log[1];
@@ -209,20 +211,22 @@ namespace dz003namespace
         String &sendTo = std::get<4>(c->config);
         obj->set(true);
         int pre_abs = 0;
-        TickType_t pre_tickBig = pdMS_TO_TICKS(c_tickBig);
+        TickType_t pd_tick = pdMS_TO_TICKS(c_tick);
+        TickType_t pd_tickBig = tickCount + pdMS_TO_TICKS(c_tickBig);
         c->startCallback();
         for (;;)
         {
             log_0 = frequencyvalue[0];
             log_1 = frequencyvalue[1];
             int now_abs = std::abs(log_0 - log_1);
-            myStruct_t data = {
-                .sendTo_name = sendTo,
-                .str = "[\"mcu_dz003State_get\"]"};
-            if (xQueueSend(c->queueHandle, &data, 0) != pdPASS)
-            {
-                ESP_LOGV("DZ003", "Queue is full");
-            }
+            // myStruct_t data = {
+            //     .sendTo_name = sendTo,
+            //     .str = "[\"mcu_dz003State_get\"]"};
+            // if (xQueueSend(c->myStructQueueHandle, &data, 0) != pdPASS)
+            // {
+            //     ESP_LOGV("DZ003", "Queue is full");
+            // }
+            c->tickCallBack();
             if (std::abs(now_abs - pre_abs) > c_abs)
             {
                 obj->set(false);
@@ -235,12 +239,12 @@ namespace dz003namespace
             {
                 pre_abs = now_abs;
             }
-            if (pre_tickBig > ticksCount)
+            if (pd_tickBig > tickCount)
             {
-                pre_tickBig = pdMS_TO_TICKS(c_tickBig);
+                pd_tickBig = tickCount + pdMS_TO_TICKS(c_tickBig);
                 obj->frequency.set0();
             }
-            vTaskDelayUntil(&ticksCount, pdMS_TO_TICKS(c_tick));
+            vTaskDelayUntil(&tickCount, pd_tick);
         }
     }
 }

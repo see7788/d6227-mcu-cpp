@@ -54,8 +54,8 @@ struct state_t
   MyFs *i18n;
   MyNet *mcu_net;
   HardwareSerial *mcu_serial;
-  dz003namespace::taskParam_t *mcu_dz003TaskParam;
-  a7129namespace::taskParam_t *mcu_yblTaskParam;
+  dz003namespace::mainTaskParam_t *mcu_dz003TaskParam;
+  a7129namespace::rootTaskParam_t *mcu_yblTaskParam;
 };
 state_t state;
 void esp_eg_on(void *registEr, esp_event_base_t postEr, int32_t eventId, void *eventData)
@@ -89,12 +89,17 @@ void esp_eg_on(void *registEr, esp_event_base_t postEr, int32_t eventId, void *e
 }
 void mcu_serial_callback(void)
 {
+  BaseType_t xHigherPriorityTaskWoken = pdFALSE;
   myStruct_t myStruct = {
       .sendTo_name = std::get<0>(config.mcu_serial),
       .str = state.mcu_serial->readStringUntil('\n')};
-  if (xQueueSendFromISR(state.resQueueHandle, &myStruct, 0) != pdPASS)
+  if (xQueueSendFromISR(state.resQueueHandle, &myStruct, &xHigherPriorityTaskWoken) != pdPASS)
   {
     ESP_LOGE("mcu_serial_callback", "resQueueHandle is full");
+  }
+  if (xHigherPriorityTaskWoken == pdTRUE)
+  {
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
   }
 }
 void config_set(JsonVariant obj)
@@ -127,11 +132,11 @@ void config_set(JsonVariant obj)
   {
     JsonArray mcu_ybl = obj["mcu_ybl"].as<JsonArray>();
     std::get<0>(config.mcu_ybl) = mcu_ybl[0].as<String>();
-    JsonArray mcu_ybluseIds = mcu_ybl[1].as<JsonArray>();
-    for (int i = 0; i < mcu_ybluseIds.size(); ++i)
-    {
-      std::get<1>(config.mcu_ybl)[i] = mcu_ybluseIds[i].as<a7129namespace::id_t>();
-    }
+    // JsonArray mcu_ybluseIds = mcu_ybl[1].as<JsonArray>();
+    // for (int i = 0; i < mcu_ybluseIds.size(); ++i)
+    // {
+    //   std::get<1>(config.mcu_ybl)[i] = mcu_ybluseIds[i].as<a7129namespace::id_t>();
+    // }
   }
 }
 void config_get(JsonVariant obj)
@@ -161,16 +166,17 @@ void config_get(JsonVariant obj)
   mcu_dz003.add(std::get<4>(config.mcu_dz003));
   JsonArray mcu_ybl = obj.createNestedArray("mcu_ybl");
   mcu_ybl.add(std::get<0>(config.mcu_ybl));
-  JsonArray mcu_ybluseIds = mcu_ybl.createNestedArray();
-  for (const auto &element : std::get<1>(config.mcu_ybl))
-  {
-    if (element)
-      mcu_ybluseIds.add(element);
-  }
+  // JsonArray mcu_ybluseIds = mcu_ybl.createNestedArray();
+  // for (const auto &element : std::get<1>(config.mcu_ybl))
+  // {
+  //   if (element)
+  //     mcu_ybluseIds.add(element);
+  // }
 }
 void reqTask(void *nullparam)
 {
   myStruct_t myStruct;
+  ESP_LOGV("reqTask", "%d", ESP.getFreeHeap());
   for (;;)
   {
     if (xQueueReceive(state.reqQueueHandle, &myStruct, portMAX_DELAY) == pdPASS)
@@ -196,6 +202,7 @@ void resTask(void *nullparam)
 {
   // uint32_t ptr;
   myStruct_t resStruct;
+  ESP_LOGV("resTask", "%d", ESP.getFreeHeap());
   for (;;)
   {
     // if (xTaskNotifyWait(pdFALSE, ULONG_MAX, (uint32_t *)&ptr, portMAX_DELAY) == pdPASS)
@@ -339,6 +346,8 @@ void setup()
   state.reqQueueHandle = xQueueCreate(10, sizeof(myStruct_t));
   state.resQueueHandle = xQueueCreate(10, sizeof(myStruct_t));
   state.mcu_serial = &Serial;
+  xTaskCreate(resTask, "resTask", 1024 * 8, NULL, state.taskindex++, NULL);
+  xTaskCreate(reqTask, "reqTask", 1024 * 4, NULL, state.taskindex++, NULL);
   // state.configFs->listFilePrint("/", 3);
   ESP_ERROR_CHECK(esp_task_wdt_init(20000, false)); // 初始化看门狗
   ESP_ERROR_CHECK(esp_task_wdt_add(NULL));
@@ -383,30 +392,41 @@ void setup()
   state.mcu_net = new MyNet(config.mcu_net);
   xEventGroupWaitBits(state.eg_Handle, EGBIG_NET, pdFALSE, pdTRUE, portMAX_DELAY);
 
-  state.mcu_yblTaskParam = new a7129namespace::taskParam_t{
+  state.mcu_yblTaskParam = new a7129namespace::rootTaskParam_t{
       .config = config.mcu_ybl,
-      .queueHandle = state.resQueueHandle,
+      // .myStructQueueHandle = state.resQueueHandle,
       .startCallback = []()
+      { xEventGroupSetBits(state.eg_Handle, EGBIG_YBL); },
+      .tickCallBack = []()
       {
-        xEventGroupSetBits(state.eg_Handle, EGBIG_YBL);
-      }};
-  xTaskCreate(a7129namespace::yblResTask, "mcu_yblTask", 1024 * 6, (void *)state.mcu_yblTaskParam, state.taskindex++, NULL);
+        myStruct_t obj = {
+                        .sendTo_name = std::get<0>( config.mcu_ybl),
+                        .str = "[\"ybl.State\"]"};
+        if (xQueueSend(state.resQueueHandle, &obj, 50) != pdPASS)
+          {
+                        ESP_LOGV("yblInterrupt", "Queue is full");
+          } }};
+  xTaskCreate(a7129namespace::rootTask, "mcu_yblTask", 1024 * 6, (void *)state.mcu_yblTaskParam, state.taskindex++, NULL);
   xEventGroupWaitBits(state.eg_Handle, EGBIG_YBL, pdFALSE, pdTRUE, portMAX_DELAY);
 
-  // state.mcu_dz003TaskParam = new dz003namespace::taskParam_t{
-  //     .config = config.mcu_dz003,
-  //     .queueHandle = state.resQueueHandle,
-  //     .obj = dz003namespace::Dz003Class(),
-  //     .startCallback = []()
-  //     {
-  //       xEventGroupSetBits(state.eg_Handle, EGBIG_DZ003);
-  //     }};
+  state.mcu_dz003TaskParam = new dz003namespace::mainTaskParam_t{
+      .config = config.mcu_dz003,
+      .obj = dz003namespace::Dz003Class(),
+      // .myStructQueueHandle = state.resQueueHandle,
+      .startCallback = []()
+      { xEventGroupSetBits(state.eg_Handle, EGBIG_DZ003); },
+      .tickCallBack = []()
+      {
+        myStruct_t data = {
+                .sendTo_name = std::get<4>( config.mcu_dz003),
+                .str = "[\"mcu_dz003State_get\"]"};
+            if (xQueueSend(state.resQueueHandle, &data, 0) != pdPASS)
+            {
+                ESP_LOGV("DZ003", "Queue is full");
+            } }};
 
-  // xTaskCreate(dz003namespace::looptask, "mcu_dz003Task", 1024 * 6, (void *)state.mcu_dz003TaskParam, state.taskindex++, NULL);
-  // xEventGroupWaitBits(state.eg_Handle, EGBIG_DZ003, pdFALSE, pdTRUE, portMAX_DELAY);
-
-  xTaskCreate(resTask, "resTask", 1024 * 8, NULL, state.taskindex++, NULL);
-  xTaskCreate(reqTask, "reqTask", 1024 * 4, NULL, state.taskindex++, NULL);
+  xTaskCreate(dz003namespace::mainTask, "mcu_dz003Task", 1024 * 6, (void *)state.mcu_dz003TaskParam, state.taskindex++, NULL);
+  xEventGroupWaitBits(state.eg_Handle, EGBIG_DZ003, pdFALSE, pdTRUE, portMAX_DELAY);
 
   // interrupts(); // 打开全局所有中断
   //  vTaskStartScheduler();//

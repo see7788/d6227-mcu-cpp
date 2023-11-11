@@ -67,24 +67,15 @@
 // #define CMD_DEEP_SLEEP  0x1C  //0001,1100 Deep Sleep mode(tri-state)
 #define CMD_DEEP_SLEEP 0x1F // 0001,1111 Deep Sleep mode(pull-high)
 /////////////////////////////////////////////////////////////////////////////////////////////寄存器地址
-
-#define Sint8 signed char
 #define Uint8 unsigned char
 #define Uint16 unsigned int
-#define Uint32 unsigned long
-#define Sint32 signed long
+// #define Sint32 signed long
+// #define Uint32 unsigned long
 
 /////////////////////////////////////////////////////////////////////////////////////类型转换等
 
 #define TIMEOUT 50  // 50ms
 #define t0hrel 1000 // 1ms
-
-Uint8 CmdBuf[11];
-Uint8 A7129_RX_BUFF[64];
-Uint16 end_data[7];
-bool interrupt_state = 0; // 1有新接收
-bool send_state = 1;      //  0正在发送
-
 #define SDIO 32
 #define SCS 14
 #define SCK 33
@@ -98,11 +89,28 @@ namespace a7129namespace
     **  Global Variable Declaration
     *********************************************************************/
 
-    Uint8 BitCount_Tab[16] = {0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4};
-    Uint8 ID_Tab[8] = {0x54, 0x21, 0xA4, 0x23, 0xC7, 0x33, 0x45, 0xE7}; // ID code
     Uint8 A7129_RX_BUFF[64];
-    Uint8 PN9_Tab[64]; // 需要发送的数据
-
+    SemaphoreHandle_t a7129_rx_semaphore;
+    typedef uint32_t id_t;
+    typedef Uint8 type_t;
+    typedef Uint8 state_t;
+    typedef struct
+    {
+        id_t id;
+        type_t type;
+        state_t state;
+    } idInfo_t;
+    typedef std::unordered_map<id_t, idInfo_t> idsInfo_t;
+    idsInfo_t idsInfo;
+    // sendTo_name,id白名单
+    typedef std::tuple<String, idsInfo_t> config_t;
+    typedef struct
+    {
+        config_t &config;
+        //QueueHandle_t &myStructQueueHandle;
+        std::function<void(void)> startCallback;
+        std::function<void(void)> tickCallBack;
+    } rootTaskParam_t;
     const Uint16 A7129Config[] = // 433MHz, 100kbps (IFBW = 100KHz, Fdev = 37.5KHz), Crystal=12.8MHz
         {
             0x0021, // SYSTEM CLOCK register,
@@ -155,24 +163,6 @@ namespace a7129namespace
     /*********************************************************************
     **  function Declaration
     *********************************************************************/
-    void InitRF(void);
-    void A7129_Config(void);
-    void A7129_WriteID(void);
-    void A7129_Cal(void);
-    void StrobeCMD(Uint8);
-    void ByteSend(Uint8);
-    Uint8 ByteRead(void);
-    void A7129_WriteReg(Uint8, Uint16);
-    Uint16 A7129_ReadReg(Uint8);
-    void A7129_WritePageA(Uint8, Uint16);
-    Uint16 A7129_ReadPageA(Uint8);
-    void A7129_WritePageB(Uint8, Uint16);
-    Uint16 A7129_ReadPageB(Uint8);
-    void A7129_WriteFIFO(void);
-    void RxPacket(void);
-    void handleInterrupt(void);
-    ////////////////////////////////////////////////////////else说明
-
     void StrobeCMD(Uint8 cmd)
     {
         Uint8 i;
@@ -402,7 +392,7 @@ namespace a7129namespace
     {
         Uint8 i;
         Uint8 d1, d2, d3, d4;
-
+        Uint8 ID_Tab[8] = {0x54, 0x21, 0xA4, 0x23, 0xC7, 0x33, 0x45, 0xE7}; // ID code
         digitalWrite(SCS, LOW);
 
         ByteSend(CMD_ID_W);
@@ -499,7 +489,7 @@ namespace a7129namespace
         }
     }
 
-    void A7129_WriteFIFO(void)
+    void A7129_WriteFIFO(Uint8 db[8])
     {
         Uint8 i;
 
@@ -508,8 +498,8 @@ namespace a7129namespace
         digitalWrite(SCS, LOW);
 
         ByteSend(CMD_FIFO_W); // TX FIFO write command
-        for (i = 0; i < 64; i++)
-            ByteSend(PN9_Tab[i]);
+        for (i = 0; i < 7; i++)
+            ByteSend(db[i]);
         digitalWrite(SCS, HIGH);
     }
 
@@ -519,8 +509,8 @@ namespace a7129namespace
         StrobeCMD(CMD_RFR); // RX FIFO address pointer reset
         digitalWrite(SCS, LOW);
 
-        ByteSend(CMD_FIFO_R);    // RX FIFO read command
-        for (i = 0; i < 64; i++) // 只接收7个数据即可
+        ByteSend(CMD_FIFO_R);                       // RX FIFO read command
+        for (i = 0; i < sizeof(A7129_RX_BUFF); i++) // 只接收7个数据即可
         {
             A7129_RX_BUFF[i] = ByteRead();
         }
@@ -592,24 +582,30 @@ namespace a7129namespace
             CRC16_Update(Payload[i]); // Payload--> the data you send
     }
 
-    static int Data_Output(Uint8 *Payload, Uint16 *DataBuf) // 数据输出
+    int yblCrc() // 数据输出
     {
-        CRC_test(Payload, 3);
+        CRC_test(A7129_RX_BUFF, 3);
         // 深圳市易百珑科技有限公司
-        if ((CRC16_High == Payload[3]) && (CRC16_Low == Payload[4]))
+        if ((CRC16_High == A7129_RX_BUFF[3]) && (CRC16_Low == A7129_RX_BUFF[4]))
         {
-            CRC_test(Payload, 6);
-            if (CRC16_Low == Payload[6])
+            CRC_test(A7129_RX_BUFF, 6);
+            if (CRC16_Low == A7129_RX_BUFF[6])
             {
-                DataBuf[0] = Payload[0];
-                DataBuf[1] = Payload[1];
-                DataBuf[2] = Payload[2];
-                DataBuf[3] = Payload[3];
-                DataBuf[4] = Payload[4];
-                DataBuf[5] = Payload[5];
+                id_t id_val = A7129_RX_BUFF[0] << 24 | A7129_RX_BUFF[1] << 16 | (A7129_RX_BUFF[5] & 0x0f) << 8 | ((A7129_RX_BUFF[5] & 0x3f) >> 4) * 2;
+                if (idsInfo.empty() || idsInfo.count(id_val) > 0)
+                {
+                state_t state_val = A7129_RX_BUFF[2];
+                type_t type_val = (A7129_RX_BUFF[5] >> 6) + 1;
+                idsInfo[id_val] = {
+                    .id = id_val,
+                    .type = type_val,
+                    .state = state_val};
+                }
+                BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+                xSemaphoreGiveFromISR(a7129_rx_semaphore, &xHigherPriorityTaskWoken);
+                portYIELD_FROM_ISR(a7129_rx_semaphore);
                 return (0); // 接收正确
             }
-
             else
             {
                 return (1); // 接收错误
@@ -621,149 +617,67 @@ namespace a7129namespace
         }
     }
 
-    /********/
-    // crc
-    typedef unsigned long long id_t;
-    typedef Uint8 type_t;
-    typedef Uint8 state_t;
-
-    typedef struct
+    void yblSend(id_t id)
     {
-        id_t id;
-        type_t type;
-        state_t state;
-    } idState_t;
-    idState_t dev[20];
-    typedef std::vector<id_t> useIds_t;
-    useIds_t useIds;
-    // sendTo_name,id白名单
-    typedef std::tuple<String, useIds_t> config_t;
-    int devMaxIndex = 0;
-   // void IRAM_ATTR yblInterrupt(void)
+        idInfo_t idInfo;
+        StrobeCMD(CMD_TX);
+        Uint8 db[8]; // 需要发送的数据
+        // id1  id2  state  else  else type
+        db[0] = idInfo.id >> 24;
+        db[1] = (idInfo.id >> 16) & 0xff;
+        db[2] = idInfo.state;
+        db[3] = (idInfo.id >> 8) & 0xff;
+        db[4] = idInfo.id & 0xff;
+        db[5] = idInfo.type;
+        db[6] = 0xff;
+        InitRF();
+        A7129_WriteFIFO(db); // write data to TX FIFO
+        StrobeCMD(CMD_STBY);
+        StrobeCMD(CMD_PLL);
+        StrobeCMD(CMD_RX); // 设置为接收模式
+    }
+
     void yblInterrupt(void)
     {
-        if (send_state == 1)
-        {
-            RxPacket();        // 接收数据,数据存放在A7129_RX_BUFF[],数组最多7个元素
-            StrobeCMD(CMD_RX); // 设置为接收模式
-            if (Data_Output(A7129_RX_BUFF, end_data) != 0 && A7129_RX_BUFF[6] != 0xff)
-                return;
-            id_t id_vale = end_data[0] << 24 | end_data[1] << 16 | (end_data[5] & 0x0f) << 8 | ((end_data[5] & 0x3f) >> 4) * 2;
-            state_t state_vale = A7129_RX_BUFF[2];
-            type_t type_vale = (A7129_RX_BUFF[5] >> 6) + 1;
-
-            if (A7129_RX_BUFF[6] == 0xff)
-            {
-                id_t id_vale = end_data[0] << 24 | end_data[1] << 16 | end_data[3] << 8 | end_data[4];
-                state_t state_vale = A7129_RX_BUFF[2];
-                type_t type_vale = (A7129_RX_BUFF[5] >> 6) + 1;
-            }
-            std::size_t usel = useIds.size();
-            if (usel > 0)
-            {
-                // for (char i = 0; i < sizeof(*useIds) / sizeof((*useIds)[0]); i++)
-                for (char i = 0; i < usel; i++)
-                {
-
-                    if (id_vale == useIds[i])
-                    {
-                        interrupt_state = 1;
-                        dev[i].id = id_vale;
-                        dev[i].state = state_vale;
-                        dev[i].type = type_vale;
-
-                        return;
-                    }
-                }
-            }
-            else
-            {
-                for (int i = 0; i < sizeof(dev) / sizeof(dev[0]); i++)
-                {
-                    if (dev[i].id == id_vale)
-                    {
-                        interrupt_state = 1;
-                        dev[i].state = state_vale;
-                        return;
-                    }
-                }
-                interrupt_state = 1;
-                dev[devMaxIndex].id = id_vale;
-                dev[devMaxIndex].state = state_vale;
-                dev[devMaxIndex].type = type_vale;
-                devMaxIndex++;
-            }
-            // ESP_LOGV("DEBUG", "send_state=%d,interrupt_state=%d", send_state, interrupt_state);
-        }
+        RxPacket(); // 接收数据,数据存放在A7129_RX_BUFF[],数组最多7个元素
+        StrobeCMD(CMD_RX);
+        yblCrc();
     }
-    void yblSend(idState_t idState)
+    void rootTask(void *ptr)
     {
-        // id1  id2  state  else  else type
-        send_state = 0;
-
-        PN9_Tab[0] = idState.id >> 24;
-        PN9_Tab[1] = (idState.id >> 16) & 0xff;
-        PN9_Tab[2] = idState.state;
-        PN9_Tab[3] = (idState.id >> 8) & 0xff;
-        PN9_Tab[4] = idState.id & 0xff;
-        PN9_Tab[5] = idState.type;
-        PN9_Tab[6] = 0xff;
-        InitRF();
-        A7129_WriteFIFO(); // write data to TX FIFO
-        StrobeCMD(CMD_TX);
-        delayMicroseconds(10);
-        vTaskDelay(30);
-        InitRF();
-        delayMicroseconds(300);
-        StrobeCMD(CMD_STBY);
-        StrobeCMD(CMD_PLL);
-        StrobeCMD(CMD_RX); // 设为接收模式
-        send_state = 1;
-    }
-    typedef struct
-    {
-        config_t &config;
-        // TaskHandle_t &notifyTaskHandle;
-        QueueHandle_t &queueHandle;
-        std::function<void(void)> startCallback;
-    } taskParam_t;
-    void yblResTask(void *ptr)
-    {
-        taskParam_t *c = (taskParam_t *)ptr;
-        String &sendTo=std::get<0>(c->config);
-        useIds=std::get<1>(c->config);
-        send_state = 1;
+        rootTaskParam_t *rootTaskParam = (rootTaskParam_t *)ptr;
         InitRF(); // init RF,最后一个字段0x8E,0x12,0x86
-        delayMicroseconds(300);
         StrobeCMD(CMD_STBY);
         StrobeCMD(CMD_PLL);
-        StrobeCMD(CMD_RX); // 设为接收模式
         pinMode(GIO1, INPUT_PULLUP);
+        a7129_rx_semaphore = xSemaphoreCreateBinary();
         attachInterrupt(GIO1, yblInterrupt, FALLING); // 创建中断
-        c->startCallback();
+        StrobeCMD(CMD_RX);                            // 设为接收模式
+        TickType_t lastSendTime = 0;
+        int pd_tick = pdMS_TO_TICKS(800);
+        rootTaskParam->startCallback();
         while (1)
         {
-            if (interrupt_state == 1)
+            if (xSemaphoreTake(a7129_rx_semaphore, portMAX_DELAY) == pdTRUE)
             {
-                for (int i = 0; i < 20; i++)
+                TickType_t currentTime = xTaskGetTickCount();
+                if ((currentTime - lastSendTime) >= pd_tick)
                 {
-                    if (dev[i].id)
+                    lastSendTime = currentTime;
+                    for (const auto &pair : idsInfo)
                     {
-                        ESP_LOGV("A7129", "id=%lld, type=%u, state=%u", dev[i].id, dev[i].type, dev[i].state);
+                        ESP_LOGV("TAG", "ID: %u, Type: %u, State: %u", pair.second.id, pair.second.type, pair.second.state);
                     }
+                    // myStruct_t obj = {
+                    //     .sendTo_name = std::get<0>(rootTaskParam->config),
+                    //     .str = "[\"ybl.State\"]"};
+                    // if (xQueueSend(rootTaskParam->myStructQueueHandle, &obj, 50) != pdPASS)
+                    // {
+                    //     ESP_LOGV("yblInterrupt", "Queue is full");
+                    // }
+                    rootTaskParam->tickCallBack();
                 }
-                myStruct_t obj = {
-                    .sendTo_name = sendTo,
-                    .str = "[\"ybl.State\"]"};
-                // xTaskNotify(c->notifyTaskHandle, (uint32_t)obj, eSetValueWithOverwrite);
-                if (xQueueSend(c->queueHandle, &obj, 0) != pdPASS)
-                {
-                    ESP_LOGV("A7129", "Queue is full");
-                }
-                interrupt_state = 0;
             }
-            // yblSend(dev[0]);
-            vTaskDelay(pdMS_TO_TICKS(3000));
         }
     }
 };
