@@ -2,8 +2,8 @@
 #define a7129namespace_h
 #include <Arduino.h>
 #include <tuple>
-#include <vector>
 #include <unordered_map>
+#include <ArduinoJson.h>
 #include <freertos/queue.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -48,8 +48,8 @@
 #define ACK_PAGEB 0x03
 #define ART_PAGEB 0x04
 
-#define CMD_Reg_W 0x00  // 000x,xxxx control register write
-#define CMD_Reg_R 0x80  // 100x,xxxx control register read
+#define CMD_Reg_W 0x00  // 000x,xxxx control register write控制寄存器写入
+#define CMD_Reg_R 0x80  // 100x,xxxx control register read控制寄存器读取
 #define CMD_ID_W 0x20   // 001x,xxxx ID write
 #define CMD_ID_R 0xA0   // 101x,xxxx ID Read
 #define CMD_FIFO_W 0x40 // 010x,xxxx TX FIFO Write
@@ -58,24 +58,20 @@
 #define CMD_TFR 0x60    // 0110,xxxx TX FIFO address pointrt reset
 #define CMD_RFR 0xE0    // 1110,xxxx RX FIFO address pointer reset
 
-#define CMD_SLEEP 0x10 // 0001,0000 SLEEP mode
-#define CMD_IDLE 0x12  // 0001,0010 IDLE mode
-#define CMD_STBY 0x14  // 0001,0100 Standby mode
-#define CMD_PLL 0x16   // 0001,0110 PLL mode
-#define CMD_RX 0x18    // 0001,1000 RX mode
-#define CMD_TX 0x1A    // 0001,1010 TX mode
+#define CMD_SLEEP 0x10 // 0001,0000 SLEEP mode进入睡眠模式
+#define CMD_IDLE 0x12  // 0001,0010 IDLE mode进入空闲模式
+#define CMD_STBY 0x14  // 0001,0100 Standby mode进入待机模式
+#define CMD_PLL 0x16   // 0001,0110 PLL mode进入PLL模式
+#define CMD_RX 0x18    // 0001,1000 RX mode进入接收模式
+#define CMD_TX 0x1A    // 0001,1010 TX mode进入发送模式
 // #define CMD_DEEP_SLEEP  0x1C  //0001,1100 Deep Sleep mode(tri-state)
 #define CMD_DEEP_SLEEP 0x1F // 0001,1111 Deep Sleep mode(pull-high)
 /////////////////////////////////////////////////////////////////////////////////////////////寄存器地址
 #define Uint8 unsigned char
 #define Uint16 unsigned int
-// #define Sint32 signed long
-// #define Uint32 unsigned long
 
 /////////////////////////////////////////////////////////////////////////////////////类型转换等
 
-#define TIMEOUT 50  // 50ms
-#define t0hrel 1000 // 1ms
 #define SDIO 32
 #define SCS 14
 #define SCK 33
@@ -88,29 +84,6 @@ namespace a7129namespace
     /*********************************************************************
     **  Global Variable Declaration
     *********************************************************************/
-
-    Uint8 A7129_RX_BUFF[64];
-    SemaphoreHandle_t a7129_rx_semaphore;
-    typedef uint32_t id_t;
-    typedef Uint8 type_t;
-    typedef Uint8 state_t;
-    typedef struct
-    {
-        id_t id;
-        type_t type;
-        state_t state;
-    } idInfo_t;
-    typedef std::unordered_map<id_t, idInfo_t> idsInfo_t;
-    idsInfo_t idsInfo;
-    // sendTo_name,id白名单
-    typedef std::tuple<String, idsInfo_t> config_t;
-    typedef struct
-    {
-        config_t &config;
-        //QueueHandle_t &myStructQueueHandle;
-        std::function<void(void)> startCallback;
-        std::function<void(void)> tickCallBack;
-    } rootTaskParam_t;
     const Uint16 A7129Config[] = // 433MHz, 100kbps (IFBW = 100KHz, Fdev = 37.5KHz), Crystal=12.8MHz
         {
             0x0021, // SYSTEM CLOCK register,
@@ -503,23 +476,8 @@ namespace a7129namespace
         digitalWrite(SCS, HIGH);
     }
 
-    void RxPacket(void)
-    {
-        Uint8 i;
-        StrobeCMD(CMD_RFR); // RX FIFO address pointer reset
-        digitalWrite(SCS, LOW);
-
-        ByteSend(CMD_FIFO_R);                       // RX FIFO read command
-        for (i = 0; i < sizeof(A7129_RX_BUFF); i++) // 只接收7个数据即可
-        {
-            A7129_RX_BUFF[i] = ByteRead();
-        }
-        digitalWrite(SCS, HIGH);
-    }
-
     void InitRF(void)
     {
-
         // initial pin
         pinMode(SCS, OUTPUT);
         digitalWrite(SCS, HIGH);
@@ -539,146 +497,197 @@ namespace a7129namespace
         A7129_Cal();           // IF and VCO calibration
         delayMicroseconds(1);  // for crystal stabilized
     }
-
-    /********/
-    Uint8 CRC16_High, CRC16_Low;
-    Uint8 CRC16_LookupHigh[16] = {
-        0x00, 0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70,
-        0x81, 0x91, 0xA1, 0xB1, 0xC1, 0xD1, 0xE1, 0xF1};
-    Uint8 CRC16_LookupLow[16] = {
-        0x00, 0x21, 0x42, 0x63, 0x84, 0xA5, 0xC6, 0xE7,
-        0x08, 0x29, 0x4A, 0x6B, 0x8C, 0xAD, 0xCE, 0xEF};
-    void CRC16_Init(void)
+    namespace ybl
     {
-        CRC16_High = 0x1D;
-        CRC16_Low = 0x0F;
-    }
-    void CRC16_Update4Bits(Uint8 val)
-    {
-        Uint8 t;
-        // Step one, extract the Most significant 4 bits of the CRC register
-        t = CRC16_High >> 4;
-        // XOR in the Message Data into the extracted bits
-        t = t ^ val;
-        // Shift the CRC Register left 4 bits
-        CRC16_High = (CRC16_High << 4) | (CRC16_Low >> 4);
-        CRC16_Low = CRC16_Low << 4;
-        // Do the table lookups and XOR the result into the CRC Tables
-        CRC16_High = CRC16_High ^ CRC16_LookupHigh[t];
-        CRC16_Low = CRC16_Low ^ CRC16_LookupLow[t];
-    }
-
-    void CRC16_Update(Uint8 val)
-    {
-        CRC16_Update4Bits(val >> 4);   // High nibble first
-        CRC16_Update4Bits(val & 0x0F); // Low nibble
-    }
-
-    void CRC_test(Uint8 *Payload, Uint8 length)
-    {
-        Uint8 i;
-        CRC16_Init();
-        for (i = 0; i < length; i++)  // length--> the payload length
-            CRC16_Update(Payload[i]); // Payload--> the data you send
-    }
-
-    int yblCrc() // 数据输出
-    {
-        CRC_test(A7129_RX_BUFF, 3);
-        // 深圳市易百珑科技有限公司
-        if ((CRC16_High == A7129_RX_BUFF[3]) && (CRC16_Low == A7129_RX_BUFF[4]))
+        typedef Uint8 rx_buff_t[64];
+        Uint8 CRC16_High, CRC16_Low;
+        Uint8 CRC16_LookupHigh[16] = {
+            0x00, 0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70,
+            0x81, 0x91, 0xA1, 0xB1, 0xC1, 0xD1, 0xE1, 0xF1};
+        Uint8 CRC16_LookupLow[16] = {
+            0x00, 0x21, 0x42, 0x63, 0x84, 0xA5, 0xC6, 0xE7,
+            0x08, 0x29, 0x4A, 0x6B, 0x8C, 0xAD, 0xCE, 0xEF};
+        typedef uint32_t id_t;
+        typedef Uint8 type_t;
+        typedef Uint8 state_t;
+        typedef struct
         {
-            CRC_test(A7129_RX_BUFF, 6);
-            if (CRC16_Low == A7129_RX_BUFF[6])
-            {
-                id_t id_val = A7129_RX_BUFF[0] << 24 | A7129_RX_BUFF[1] << 16 | (A7129_RX_BUFF[5] & 0x0f) << 8 | ((A7129_RX_BUFF[5] & 0x3f) >> 4) * 2;
-                if (idsInfo.empty() || idsInfo.count(id_val) > 0)
-                {
-                state_t state_val = A7129_RX_BUFF[2];
-                type_t type_val = (A7129_RX_BUFF[5] >> 6) + 1;
-                idsInfo[id_val] = {
-                    .id = id_val,
-                    .type = type_val,
-                    .state = state_val};
-                }
-                BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-                xSemaphoreGiveFromISR(a7129_rx_semaphore, &xHigherPriorityTaskWoken);
-                portYIELD_FROM_ISR(a7129_rx_semaphore);
-                return (0); // 接收正确
-            }
-            else
-            {
-                return (1); // 接收错误
-            }
+            id_t id;
+            type_t type;
+            state_t state;
+        } idInfo_t;
+        typedef std::unordered_map<id_t, idInfo_t> datas_t;
+        datas_t *datas;
+        typedef std::tuple<String, datas_t> config_t;
+        QueueHandle_t crcRxQueueHandle;
+        typedef struct
+        {
+            int *taskindex;
+            config_t &config;
+            std::function<void(void)> startCallBack;
+            void (*timeClallBack)(TimerHandle_t);
+            void (*callBack)(void);
+        } taskParam_t;
+        void datas_set(rx_buff_t &rx_buff)
+        {
         }
-        else
+        void CRC16_Init(void)
         {
-            return (2); // 接收错误
+            CRC16_High = 0x1D;
+            CRC16_Low = 0x0F;
         }
-    }
-
-    void yblSend(id_t id)
-    {
-        idInfo_t idInfo;
-        StrobeCMD(CMD_TX);
-        Uint8 db[8]; // 需要发送的数据
-        // id1  id2  state  else  else type
-        db[0] = idInfo.id >> 24;
-        db[1] = (idInfo.id >> 16) & 0xff;
-        db[2] = idInfo.state;
-        db[3] = (idInfo.id >> 8) & 0xff;
-        db[4] = idInfo.id & 0xff;
-        db[5] = idInfo.type;
-        db[6] = 0xff;
-        InitRF();
-        A7129_WriteFIFO(db); // write data to TX FIFO
-        StrobeCMD(CMD_STBY);
-        StrobeCMD(CMD_PLL);
-        StrobeCMD(CMD_RX); // 设置为接收模式
-    }
-
-    void yblInterrupt(void)
-    {
-        RxPacket(); // 接收数据,数据存放在A7129_RX_BUFF[],数组最多7个元素
-        StrobeCMD(CMD_RX);
-        yblCrc();
-    }
-    void rootTask(void *ptr)
-    {
-        rootTaskParam_t *rootTaskParam = (rootTaskParam_t *)ptr;
-        InitRF(); // init RF,最后一个字段0x8E,0x12,0x86
-        StrobeCMD(CMD_STBY);
-        StrobeCMD(CMD_PLL);
-        pinMode(GIO1, INPUT_PULLUP);
-        a7129_rx_semaphore = xSemaphoreCreateBinary();
-        attachInterrupt(GIO1, yblInterrupt, FALLING); // 创建中断
-        StrobeCMD(CMD_RX);                            // 设为接收模式
-        TickType_t lastSendTime = 0;
-        int pd_tick = pdMS_TO_TICKS(800);
-        rootTaskParam->startCallback();
-        while (1)
+        void CRC16_Update4Bits(Uint8 val)
         {
-            if (xSemaphoreTake(a7129_rx_semaphore, portMAX_DELAY) == pdTRUE)
+            Uint8 t;
+            // Step one, extract the Most significant 4 bits of the CRC register
+            t = CRC16_High >> 4;
+            // XOR in the Message Data into the extracted bits
+            t = t ^ val;
+            // Shift the CRC Register left 4 bits
+            CRC16_High = (CRC16_High << 4) | (CRC16_Low >> 4);
+            CRC16_Low = CRC16_Low << 4;
+            // Do the table lookups and XOR the result into the CRC Tables
+            CRC16_High = CRC16_High ^ CRC16_LookupHigh[t];
+            CRC16_Low = CRC16_Low ^ CRC16_LookupLow[t];
+        }
+        void CRC16_Update(Uint8 val)
+        {
+            CRC16_Update4Bits(val >> 4);   // High nibble first
+            CRC16_Update4Bits(val & 0x0F); // Low nibble
+        }
+        void CRC_test(Uint8 *Payload, Uint8 length)
+        {
+            Uint8 i;
+            CRC16_Init();
+            for (i = 0; i < length; i++)  // length--> the payload length
+                CRC16_Update(Payload[i]); // Payload--> the data you send
+        }
+        void CRC_Rx(void)
+        {
+            Uint8 rx_buff[64];
+            StrobeCMD(CMD_RX);
+            Uint8 i;
+            StrobeCMD(CMD_RFR); // RX FIFO address pointer reset
+            digitalWrite(SCS, LOW);
+            ByteSend(CMD_FIFO_R);                 // RX FIFO read command
+            for (i = 0; i < sizeof(rx_buff); i++) // 只接收7个数据即可
             {
-                TickType_t currentTime = xTaskGetTickCount();
-                if ((currentTime - lastSendTime) >= pd_tick)
+                rx_buff[i] = ByteRead();
+            }
+            digitalWrite(SCS, HIGH);
+            CRC_test(rx_buff, 3);
+            // 深圳市易百珑科技有限公司
+            if ((CRC16_High == rx_buff[3]) && (CRC16_Low == rx_buff[4]))
+            {
+                CRC_test(rx_buff, 6);
+                if (CRC16_Low == rx_buff[6])
                 {
-                    lastSendTime = currentTime;
-                    for (const auto &pair : idsInfo)
+                    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+                    if (xQueueSendFromISR(crcRxQueueHandle, &rx_buff, &xHigherPriorityTaskWoken) != pdPASS)
                     {
-                        ESP_LOGV("TAG", "ID: %u, Type: %u, State: %u", pair.second.id, pair.second.type, pair.second.state);
+                        ESP_LOGE("CRC_Rx", "crcRxQueueHandle is full");
                     }
-                    // myStruct_t obj = {
-                    //     .sendTo_name = std::get<0>(rootTaskParam->config),
-                    //     .str = "[\"ybl.State\"]"};
-                    // if (xQueueSend(rootTaskParam->myStructQueueHandle, &obj, 50) != pdPASS)
-                    // {
-                    //     ESP_LOGV("yblInterrupt", "Queue is full");
-                    // }
-                    rootTaskParam->tickCallBack();
+                    if (xHigherPriorityTaskWoken == pdTRUE)
+                    {
+                        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+                    }
                 }
             }
         }
-    }
+        void send(id_t id, state_t state)
+        {
+            idInfo_t idInfo = (*datas)[id];
+            StrobeCMD(CMD_TX);
+            Uint8 db[8]; // 需要发送的数据
+            // id1  id2  state  else  else type
+            db[0] = idInfo.id >> 24;
+            db[1] = (idInfo.id >> 16) & 0xff;
+            db[2] = state;
+            db[3] = (idInfo.id >> 8) & 0xff;
+            db[4] = idInfo.id & 0xff;
+            db[5] = idInfo.type;
+            db[6] = 0xff;
+            InitRF();
+            A7129_WriteFIFO(db); // write data to TX FIFO
+            // StrobeCMD(CMD_STBY);
+            StrobeCMD(CMD_PLL);
+            StrobeCMD(CMD_RX); // 设置为接收模式
+        }
+        void res(JsonVariant arr)
+        {
+            String api = arr[0].as<String>();
+            if (api.indexOf(".datas.clear") > -1)
+            {
+                (*datas).clear();
+            }
+        }
+        void getState(JsonVariant obj)
+        {
+            datas_t dbs = *datas;
+            JsonObject src = obj.to<JsonObject>();
+            for (const auto &pair : dbs)
+            {
+                JsonObject c = src.createNestedObject("test");
+                c["id"] = 1;    // pair.second.id;
+                c["type"] = 2;  // pair.second.type;
+                c["state"] = 3; // pair.second.state;
+            }
+        }
+        void tickTask(void *ptr)
+        {
+            taskParam_t *param = (taskParam_t *)ptr;
+            TickType_t pd_tick = pdMS_TO_TICKS(10000);
+            vTaskDelete(NULL);
+            while (1)
+            {
+                param->callBack();
+                vTaskDelay(pd_tick);
+            }
+        }
+        void mainTask(void *ptr)
+        {
+            taskParam_t *param = (taskParam_t *)ptr;
+            datas = &std::get<1>(param->config);
+            InitRF(); // init RF,最后一个字段0x8E,0x12,0x86
+            pinMode(GIO1, INPUT_PULLUP);
+            attachInterrupt(GIO1, CRC_Rx, FALLING); // 创建中断
+            StrobeCMD(CMD_RX);                      // 设为接收模式
+            TimerHandle_t timerHandle = xTimerCreate("yblTask.timerCallBack",
+                                                     1000,
+                                                     pdFALSE,
+                                                     (void *)0,
+                                                     param->timeClallBack);
+            xTaskCreate(tickTask, "yblTask.tickTask", 1024 * 4, (void *)param, *param->taskindex++, NULL);
+            rx_buff_t rx_buff;
+            crcRxQueueHandle = xQueueCreate(5, sizeof(rx_buff));
+            TickType_t pd_tick = pdMS_TO_TICKS(300);
+            param->startCallBack();
+            while (1)
+            {
+                if (xQueueReceive(crcRxQueueHandle, &rx_buff, portMAX_DELAY) == pdPASS)
+                {
+                    datas_t dbs = *datas;
+                    id_t id_val = rx_buff[0] << 24 | rx_buff[1] << 16 | (rx_buff[5] & 0x0f) << 8 | ((rx_buff[5] & 0x3f) >> 4) * 2;
+                    if (dbs.empty() || dbs.count(id_val) > 0)
+                    {
+                        state_t state_val = rx_buff[2];
+                        type_t type_val = (rx_buff[5] >> 6) + 1;
+                        dbs[id_val] = {
+                            .id = id_val,
+                            .type = type_val,
+                            .state = state_val};
+                    }
+                    if (xTimerStart(timerHandle, pd_tick) == pdPASS)
+                    {
+                        for (const auto &pair : dbs)
+                        {
+                            ESP_LOGV("TAG1", "ID: %u, Type: %u, State: %u", pair.second.id, pair.second.type, pair.second.state);
+                        }
+                    }
+                }
+            }
+        }
+    };
+
 };
 #endif

@@ -2,6 +2,7 @@
 #define dz003namespace_h
 #include <ETH.h> //引用以使用ETH
 #include <Arduino.h>
+#include <ArduinoJson.h>
 #include <functional>
 #include <tuple>
 #define ETH_ADDR 1
@@ -141,7 +142,7 @@ namespace dz003namespace
             deng.set(!c);
             frequency.set(c);
         }
-        void getState(JsonVariant obj)
+        void getState(JsonObject obj)
         {
             JsonObject c1 = obj.createNestedObject("fa");
             c1["working"] = fa.working;
@@ -193,8 +194,7 @@ namespace dz003namespace
     {
         config_t &config;
         Dz003Class obj;
-        // QueueHandle_t &myStructQueueHandle;
-        std::function<void(void)> startCallback;
+        std::function<void(void)> startCallBack;
         std::function<void(void)> tickCallBack;
     } mainTaskParam_t;
     void mainTask(void *ptr)
@@ -213,19 +213,12 @@ namespace dz003namespace
         int pre_abs = 0;
         TickType_t pd_tick = pdMS_TO_TICKS(c_tick);
         TickType_t pd_tickBig = tickCount + pdMS_TO_TICKS(c_tickBig);
-        c->startCallback();
+        c->startCallBack();
         for (;;)
         {
             log_0 = frequencyvalue[0];
             log_1 = frequencyvalue[1];
             int now_abs = std::abs(log_0 - log_1);
-            // myStruct_t data = {
-            //     .sendTo_name = sendTo,
-            //     .str = "[\"mcu_dz003State_get\"]"};
-            // if (xQueueSend(c->myStructQueueHandle, &data, 0) != pdPASS)
-            // {
-            //     ESP_LOGV("DZ003", "Queue is full");
-            // }
             c->tickCallBack();
             if (std::abs(now_abs - pre_abs) > c_abs)
             {
