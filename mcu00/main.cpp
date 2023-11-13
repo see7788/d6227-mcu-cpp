@@ -283,19 +283,10 @@ void resTask(void *nullparam)
           else if (api.indexOf("mcu_dz003") > -1)
           {
             state.mcu_dz003TaskParam->obj.res(arr);
-            arr.clear();
-            arr[0].set("set");
-            JsonObject obj = arr.createNestedObject();
-            JsonObject info = obj.createNestedObject("mcu_dz003State");
-            state.mcu_dz003TaskParam->obj.getState(info);
           }
           else if (api.indexOf("mcu_ybl") > -1)
           {
-            arr.clear();
-            arr[0].set("set");
-            JsonObject obj = arr.createNestedObject();
-            JsonVariant info = obj.createNestedObject("mcu_yblState");
-            a7129namespace::ybl::getState(info);
+            a7129namespace::ybl::res(arr);
           }
           else
           {
@@ -338,10 +329,6 @@ void mcu_yblCallBack(void)
     ESP_LOGV("mcu_yblCallBack", "Queue is full");
   }
 }
-void mcu_yblTimerCallBack(TimerHandle_t xTimer)
-{
-  mcu_yblCallBack();
-}
 void mcu_dz003CallBack(void)
 {
   myStruct_t data = {
@@ -360,7 +347,7 @@ void mcu_serialCallBack(void)
       .str = state.mcu_serial->readStringUntil('\n')};
   if (xQueueSendFromISR(state.resQueueHandle, &myStruct, &xHigherPriorityTaskWoken) != pdPASS)
   {
-    ESP_LOGE("mcu_serial_callback", "resQueueHandle is full");
+    ESP_LOGE("mcu_serial_callback", "Queue is full");
   }
   if (xHigherPriorityTaskWoken == pdTRUE)
   {
@@ -427,8 +414,7 @@ void setup()
       .config = config.mcu_ybl,
       .startCallBack = []()
       { xEventGroupSetBits(state.eg_Handle, EGBIG_YBL); },
-      .timeClallBack = mcu_yblTimerCallBack,
-      .callBack = mcu_yblCallBack};
+      .tickCallBack = mcu_yblCallBack};
   xTaskCreate(a7129namespace::ybl::mainTask, "mcu_yblTask", 1024 * 6, (void *)state.mcu_yblTaskParam, state.taskindex++, NULL);
   xEventGroupWaitBits(state.eg_Handle, EGBIG_YBL, pdFALSE, pdTRUE, portMAX_DELAY);
 

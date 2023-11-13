@@ -142,8 +142,30 @@ namespace dz003namespace
             deng.set(!c);
             frequency.set(c);
         }
-        void getState(JsonObject obj)
+        void res(JsonVariant arrRef)
         {
+            JsonArray arr = arrRef.as<JsonArray>();
+            String api = arr[0].as<String>();
+            if (api.indexOf(".fa.set") > -1)
+            {
+                fa.set(arr[1].as<bool>());
+            }
+            else if (api.indexOf(".frequency.set") > -1)
+            {
+                frequency.set(arr[1].as<bool>());
+            }
+            else if (api.indexOf(".laba.set") > -1)
+            {
+                laba.set(arr[1].as<bool>());
+            }
+            else if (api.indexOf(".deng.set") > -1)
+            {
+                deng.set(arr[1].as<bool>());
+            }
+            arr.clear();
+            arr[0].set("set");
+            JsonObject data = arr.createNestedObject();
+            JsonObject obj = data.createNestedObject("mcu_dz003State");
             JsonObject c1 = obj.createNestedObject("fa");
             c1["working"] = fa.working;
             c1["digitalRead"] = digitalRead(fa.gpio);
@@ -166,27 +188,6 @@ namespace dz003namespace
             JsonArray dengread = c4.createNestedArray("digitalRead");
             dengread.add(digitalRead(deng.false_goio));
             dengread.add(digitalRead(deng.true_goio));
-        }
-        //[api,bool]
-        void res(JsonVariant arr)
-        {
-            String api = arr[0].as<String>();
-            if (api.indexOf(".fa.set") > -1)
-            {
-                fa.set(arr[1].as<bool>());
-            }
-            else if (api.indexOf(".frequency.set") > -1)
-            {
-                frequency.set(arr[1].as<bool>());
-            }
-            else if (api.indexOf(".laba.set") > -1)
-            {
-                laba.set(arr[1].as<bool>());
-            }
-            else if (api.indexOf(".deng.set") > -1)
-            {
-                deng.set(arr[1].as<bool>());
-            }
         }
     };
 

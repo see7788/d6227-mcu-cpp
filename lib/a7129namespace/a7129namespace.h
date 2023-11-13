@@ -2,6 +2,7 @@
 #define a7129namespace_h
 #include <Arduino.h>
 #include <tuple>
+#include <vector>
 #include <unordered_map>
 #include <ArduinoJson.h>
 #include <freertos/queue.h>
@@ -499,7 +500,6 @@ namespace a7129namespace
     }
     namespace ybl
     {
-        typedef Uint8 rx_buff_t[64];
         Uint8 CRC16_High, CRC16_Low;
         Uint8 CRC16_LookupHigh[16] = {
             0x00, 0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70,
@@ -507,6 +507,7 @@ namespace a7129namespace
         Uint8 CRC16_LookupLow[16] = {
             0x00, 0x21, 0x42, 0x63, 0x84, 0xA5, 0xC6, 0xE7,
             0x08, 0x29, 0x4A, 0x6B, 0x8C, 0xAD, 0xCE, 0xEF};
+        typedef Uint8 rx_buff_t[64];
         typedef uint32_t id_t;
         typedef Uint8 type_t;
         typedef Uint8 state_t;
@@ -517,7 +518,7 @@ namespace a7129namespace
             state_t state;
         } idInfo_t;
         typedef std::unordered_map<id_t, idInfo_t> datas_t;
-        datas_t *datas;
+        datas_t datas;
         typedef std::tuple<String, datas_t> config_t;
         QueueHandle_t crcRxQueueHandle;
         typedef struct
@@ -525,12 +526,9 @@ namespace a7129namespace
             int *taskindex;
             config_t &config;
             std::function<void(void)> startCallBack;
-            void (*timeClallBack)(TimerHandle_t);
-            void (*callBack)(void);
+            std::function<void(void)> tickCallBack;
         } taskParam_t;
-        void datas_set(rx_buff_t &rx_buff)
-        {
-        }
+        taskParam_t *param;
         void CRC16_Init(void)
         {
             CRC16_High = 0x1D;
@@ -596,7 +594,7 @@ namespace a7129namespace
         }
         void send(id_t id, state_t state)
         {
-            idInfo_t idInfo = (*datas)[id];
+            idInfo_t idInfo = datas[id];
             StrobeCMD(CMD_TX);
             Uint8 db[8]; // 需要发送的数据
             // id1  id2  state  else  else type
@@ -618,36 +616,41 @@ namespace a7129namespace
             String api = arr[0].as<String>();
             if (api.indexOf(".datas.clear") > -1)
             {
-                (*datas).clear();
+                datas.clear();
+            }
+            arr.clear();
+            arr[0].set("set");
+            JsonObject data = arr.createNestedObject();
+            JsonObject obj = data.createNestedObject("mcu_yblState");
+            // ESP_LOGV("TAG", "%i", datas.size());
+            for (const auto &pair : datas)
+            {
+                //  ESP_LOGV("TAG", "ID: %u, Type: %u, State: %u", pair.second.id, pair.second.type, pair.second.state);
+                JsonObject dataObj = obj.createNestedObject(String(pair.second.id));
+                dataObj["id"] = pair.second.id;
+                dataObj["type"] = pair.second.type;
+                dataObj["state"] = pair.second.state;
             }
         }
-        void getState(JsonVariant obj)
+        void timerCallBack(TimerHandle_t xTimer)
         {
-            datas_t dbs = *datas;
-            JsonObject src = obj.to<JsonObject>();
-            for (const auto &pair : dbs)
-            {
-                JsonObject c = src.createNestedObject("test");
-                c["id"] = 1;    // pair.second.id;
-                c["type"] = 2;  // pair.second.type;
-                c["state"] = 3; // pair.second.state;
-            }
         }
         void tickTask(void *ptr)
         {
-            taskParam_t *param = (taskParam_t *)ptr;
             TickType_t pd_tick = pdMS_TO_TICKS(10000);
             vTaskDelete(NULL);
             while (1)
             {
-                param->callBack();
+                param->tickCallBack();
                 vTaskDelay(pd_tick);
             }
         }
         void mainTask(void *ptr)
         {
-            taskParam_t *param = (taskParam_t *)ptr;
-            datas = &std::get<1>(param->config);
+            param = (taskParam_t *)ptr;
+            datas = std::get<1>(param->config);
+            bool idadd = true;
+            TickType_t pd_tick = pdMS_TO_TICKS(500);
             InitRF(); // init RF,最后一个字段0x8E,0x12,0x86
             pinMode(GIO1, INPUT_PULLUP);
             attachInterrupt(GIO1, CRC_Rx, FALLING); // 创建中断
@@ -656,33 +659,28 @@ namespace a7129namespace
                                                      1000,
                                                      pdFALSE,
                                                      (void *)0,
-                                                     param->timeClallBack);
+                                                     timerCallBack);
             xTaskCreate(tickTask, "yblTask.tickTask", 1024 * 4, (void *)param, *param->taskindex++, NULL);
             rx_buff_t rx_buff;
             crcRxQueueHandle = xQueueCreate(5, sizeof(rx_buff));
-            TickType_t pd_tick = pdMS_TO_TICKS(300);
             param->startCallBack();
             while (1)
             {
                 if (xQueueReceive(crcRxQueueHandle, &rx_buff, portMAX_DELAY) == pdPASS)
                 {
-                    datas_t dbs = *datas;
                     id_t id_val = rx_buff[0] << 24 | rx_buff[1] << 16 | (rx_buff[5] & 0x0f) << 8 | ((rx_buff[5] & 0x3f) >> 4) * 2;
-                    if (dbs.empty() || dbs.count(id_val) > 0)
+                    if (idadd || datas.count(id_val) > 0)
                     {
                         state_t state_val = rx_buff[2];
                         type_t type_val = (rx_buff[5] >> 6) + 1;
-                        dbs[id_val] = {
+                        datas[id_val] = {
                             .id = id_val,
                             .type = type_val,
                             .state = state_val};
                     }
                     if (xTimerStart(timerHandle, pd_tick) == pdPASS)
                     {
-                        for (const auto &pair : dbs)
-                        {
-                            ESP_LOGV("TAG1", "ID: %u, Type: %u, State: %u", pair.second.id, pair.second.type, pair.second.state);
-                        }
+                        param->tickCallBack();
                     }
                 }
             }
