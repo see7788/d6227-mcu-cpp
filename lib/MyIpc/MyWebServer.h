@@ -24,7 +24,7 @@ public:
   AsyncWebServer* serverObj;
   AsyncWebSocket* wsObj;
   AsyncEventSource* esObj;
-  MyWebServer(uint16_t port)
+  MyWebServer(uint16_t port):wsObj(nullptr), esObj(nullptr) 
   {
     serverObj = new AsyncWebServer(port);
     DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "*");

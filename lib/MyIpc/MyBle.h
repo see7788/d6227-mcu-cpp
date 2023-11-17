@@ -1,82 +1,38 @@
 #ifndef MyBle_h
 #define MyBle_h
-#include <BLEDevice.h>
-#include <BLEUtils.h>
-#include <BLEServer.h>
-#include <BLEClient.h>
 
-class MyBle
-{
-private:
-  BLEClient *pClient;
-  BLEScan *pScan;
-  bool scanning;
-public:
-  MyBle(){
-     scanning = false;
-  }
-  void init();
-  void createService(const char *serviceName);
-  void startScanning();
-  void stopScanning();
-  bool isScanning();
-  void sendData(const char *deviceAddress, uint8_t *data, size_t length);
+#include <BLEDevice.h>// 这个头文件包含了与 BLE 设备相关的函数和类。它提供了初始化 BLE 设备、获取扫描对象等功能。
+#include <BLEUtils.h>// 这个头文件包含了一些与 BLE 相关的实用函数和宏定义。它提供了一些用于处理 BLE 数据、UUID 转换等功能的辅助函数。
+#include <BLEScan.h>// 这个头文件包含了 BLE 扫描相关的函数和类。它定义了 BLEScan 类，用于开启和配置 BLE 扫描，以及获取扫描结果。
+#include <BLEAdvertisedDevice.h>// 这个头文件包含了处理广播设备的函数和类。它定义了 BLEAdvertisedDevice 类，用于处理扫描到的广播设备信息，并提供了一些相关的回调函数。
+// class MyBleScanCallbacks : public BLEAdvertisedDeviceCallbacks {
+//   void onResult(BLEAdvertisedDevice advertisedDevice) {
+//     Serial.printf("Advertised Device: %s \n", advertisedDevice.toString().c_str());
+//   }
+// };
+// class MyBleScan
+// {
+// private:
+//   BLEScan* pBLEScan;
+// public:
+//   MyBleScan() {
+//   }
+//   void init() {
+//     BLEDevice::init("");
+//     pBLEScan = BLEDevice::getScan(); //create new scan
+//     pBLEScan->setAdvertisedDeviceCallbacks(new MyBleScanCallbacks());
+//     pBLEScan->setActiveScan(true); //active scan uses more power, but get results faster
+//     pBLEScan->setInterval(100);//扫描间隔
+//     pBLEScan->setWindow(99);  // less or equal setInterval value
+//   }
+// };
 
-};
-void MyBle::init()
-{
-  BLEDevice::init("");
-}
+// class MyBleServer
+// {
+// private:
 
-void MyBle::createService(const char *serviceName)
-{
-  // 创建蓝牙服务
-  BLEServer *pServer = BLEDevice::createServer();
-  BLEService *pService = pServer->createService(serviceName);
-
-  // 添加特征值到服务中
-  // 这里需要根据具体需求调用 BLE API 来添加特征值
-
-  pService->start();
-  pServer->getAdvertising()->start();
-}
-
-void MyBle::startScanning()
-{
-  // 开始扫描
-  if (!scanning)
-  {
-    pScan = BLEDevice::getScan();
-    // pScan->setAdvertisedDeviceCallbacks([](){});
-    pScan->setActiveScan(true);
-    pScan->start(0, false);
-    scanning = true;
-  }
-}
-
-void MyBle::stopScanning()
-{
-  // 停止扫描
-  if (scanning)
-  {
-    pScan->stop();
-    scanning = false;
-  }
-}
-
-bool MyBle::isScanning()
-{
-  // 检查是否正在扫描中
-  return scanning;
-}
-
-void MyBle::sendData(const char *deviceAddress, uint8_t *data, size_t length)
-{
-  // 发送数据给指定地址的蓝牙设备
-  BLEAddress addr(deviceAddress);
-  pClient = BLEDevice::createClient();
-  pClient->connect(addr);
-  pClient->disconnect();
-  delete pClient;
-}
+// public:
+//   MyBleServer() {
+//   }
+// };
 #endif

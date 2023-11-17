@@ -1,6 +1,7 @@
 #include <ESP.h>
 #include <tuple>
 #include <functional>
+#include <initializer_list>
 #include <stdio.h>
 #include <stdlib.h>
 #include <freertos/FreeRTOS.h>
@@ -38,7 +39,7 @@
 typedef struct
 {
   std::tuple<String, String, String, String> mcu_base;
-  std::tuple<String, int> mcu_serial;
+  std::tuple<String, int, String> mcu_serial;
   MyNet::config_t mcu_net;
   dz003namespace::config_t mcu_dz003;
   a7129namespace::ybl::config_t mcu_ybl;
@@ -104,7 +105,7 @@ void config_set(JsonVariant obj)
   if (obj.containsKey("mcu_serial"))
   {
     JsonArray json_serial = obj["mcu_serial"].as<JsonArray>();
-    config.mcu_serial = std::make_tuple(json_serial[0].as<String>(), json_serial[1].as<int>());
+    config.mcu_serial = std::make_tuple(json_serial[0].as<String>(), json_serial[1].as<int>(), json_serial[2].as<String>());
   }
   if (obj.containsKey("mcu_net"))
   {
@@ -138,18 +139,18 @@ void config_set(JsonVariant obj)
   }
   if (obj.containsKey("mcu_webPageServer"))
   {
-    JsonArray json_webPageServer=obj["mcu_webPageServer"].as<JsonArray>();
-    config.mcu_webPageServer=std::make_tuple(json_webPageServer[0].as<String>());
+    JsonArray json_webPageServer = obj["mcu_webPageServer"].as<JsonArray>();
+    config.mcu_webPageServer = std::make_tuple(json_webPageServer[0].as<String>());
   }
   if (obj.containsKey("mcu_esServer"))
   {
-    JsonArray json_esServer=obj["mcu_esServer"].as<JsonArray>();
-    config.mcu_esServer=std::make_tuple(json_esServer[0].as<String>());
+    JsonArray json_esServer = obj["mcu_esServer"].as<JsonArray>();
+    config.mcu_esServer = std::make_tuple(json_esServer[0].as<String>());
   }
   if (obj.containsKey("mcu_wsServer"))
   {
-    JsonArray json_wsServer=obj["mcu_wsServer"].as<JsonArray>();
-    config.mcu_wsServer=std::make_tuple(json_wsServer[0].as<String>(),json_wsServer[1].as<String>());
+    JsonArray json_wsServer = obj["mcu_wsServer"].as<JsonArray>();
+    config.mcu_wsServer = std::make_tuple(json_wsServer[0].as<String>(), json_wsServer[1].as<String>());
   }
 }
 void config_get(JsonVariant obj)
@@ -162,6 +163,7 @@ void config_get(JsonVariant obj)
   JsonArray json_serial = obj.createNestedArray("mcu_serial");
   json_serial.add(std::get<0>(config.mcu_serial));
   json_serial.add(std::get<1>(config.mcu_serial));
+  json_serial.add(std::get<2>(config.mcu_serial));
   JsonArray json_net = obj.createNestedArray("mcu_net");
   json_net.add(std::get<0>(config.mcu_net));
   JsonArray json_net_ap = json_net.createNestedArray();
@@ -206,13 +208,24 @@ void reqTask(void* nullparam)
   {
     if (xQueueReceive(state.reqQueueHandle, &myStruct, portMAX_DELAY) == pdPASS)
     {
-      if (myStruct.sendTo_name == "mcu_serial")
-      {
-        state.mcu_serial->println(myStruct.str);
+      if (myStruct.sendTo_name == "mcu_esServer" && state.mcu_webServer->esObj == nullptr) {
+        concatAny(myStruct.str, "[\"state.mcu_webServer->esObj==nullptr\",\"%s\"]", myStruct.str.c_str());
+        myStruct.sendTo_name = std::get<3>(config.mcu_base);
+      }
+      else if (myStruct.sendTo_name == "mcu_wsServer" && state.mcu_webServer->wsObj == nullptr) {
+        concatAny(myStruct.str, "[\"state.mcu_webServer->wsObj==nullptr\",\"%s\"]", myStruct.str.c_str());
+        myStruct.sendTo_name = std::get<3>(config.mcu_base);
+      }
+
+      if (myStruct.sendTo_name == "mcu_esServer" && state.mcu_webServer->esObj != nullptr) {
+        state.mcu_webServer->esObj->send(myStruct.str.c_str());
+      }
+      else if (myStruct.sendTo_name == "mcu_wsServer" && state.mcu_webServer->esObj != nullptr) {
+        state.mcu_webServer->wsObj->textAll(myStruct.str);
       }
       else
       {
-        myStruct.str = String("[\"sendTo_name undefind\",\"") + myStruct.str + String("\"]");
+        //concatAny(myStruct.str, "[\"myStruct.sendTo_name error\",\"%s\"]", myStruct.str.c_str());
         state.mcu_serial->println(myStruct.str);
       }
       vTaskDelay(50);
@@ -236,24 +249,23 @@ void resTask(void* nullparam)
     //  myStruct = *(structTypenamespace::myJsonArray_t *)ptr;
     if (xQueueReceive(state.resQueueHandle, &resStruct, portMAX_DELAY) == pdPASS)
     {
-      // StaticJsonDocument<2000> resdoc;
       DynamicJsonDocument resdoc(3000);
       DeserializationError error = deserializeJson(resdoc, resStruct.str);
+      myStruct_t reqStruct;
       if (error)
       {
-        resStruct.sendTo_name = std::get<3>(config.mcu_base);
-        resStruct.str = "[\"resTask error\",\"" + String(error.c_str()) + "\",\"" + resStruct.str + "\"]";
-        if (xQueueSend(state.reqQueueHandle, &resStruct, 0) != pdPASS)
+        concatAny(reqStruct.str, "[\"resTask error\",\"%s\",\"%s\"]", error.c_str(), resStruct.str.c_str());
+        if (xQueueSend(state.reqQueueHandle, &reqStruct, 0) != pdPASS)
         {
           ESP_LOGD("resTask", "reqQueueHandle is full");
         }
       }
       else
       {
-        JsonArray arr = resdoc.as<JsonArray>();
-        String api = arr[0].as<String>();
         if (xSemaphoreTake(state.configLock, portMAX_DELAY) == pdTRUE)
         {
+          JsonArray arr = resdoc.as<JsonArray>();
+          String api = arr[0].as<String>();
           if (api == "init_get")
           {
             arr.clear();
@@ -277,7 +289,7 @@ void resTask(void* nullparam)
               }
             }
             mcu_state.add(ETH.localIP().toString());
-            mcu_state.add(WiFi.localIP().toString());            
+            mcu_state.add(WiFi.localIP().toString());
             mcu_state.add(state.taskindex);
             // JsonObject i18n = obj.createNestedObject("i18n");
             // state.i18n->readFile(i18n);
@@ -336,7 +348,6 @@ void resTask(void* nullparam)
             arr[1].set(api);
           }
           xSemaphoreGive(state.configLock);
-          myStruct_t reqStruct;
           reqStruct.sendTo_name = resStruct.sendTo_name;
           JsonArray mcu_base = arr.createNestedArray();
           mcu_base.add(std::get<0>(config.mcu_base));
@@ -368,7 +379,7 @@ void setup()
   state.macId = String(ESP.getEfuseMac());
   state.eg_Handle = xEventGroupCreate();
   state.configLock = xSemaphoreCreateMutex();
-  state.mcu_serial =&Serial;
+  state.mcu_serial = &Serial;
   state.reqQueueHandle = xQueueCreate(10, sizeof(myStruct_t));
   state.resQueueHandle = xQueueCreate(10, sizeof(myStruct_t));
   state.configFs = new MyFs("/config.json");
@@ -378,9 +389,10 @@ void setup()
   JsonVariant obj = doc.as<JsonVariant>();
   state.configFs->readFile(obj); // 与下行代码交换位置，会不正常
   config_set(obj);
+  xEventGroupSetBits(state.eg_Handle, EGBIG_CONFIGJSON);
+  /*
   obj["t"] = "config.json";
   serializeJson(obj, *state.mcu_serial);
-  xEventGroupSetBits(state.eg_Handle, EGBIG_CONFIGJSON);
   ESP_LOGV("ETBIG", "CONFIGJSON");
   ESP_LOGV("getFreeHeap", "%d", ESP.getFreeHeap());
   doc.clear();
@@ -392,6 +404,7 @@ void setup()
   state.i18nFs->readFile(obj);
   serializeJson(obj, *state.mcu_serial);
   ESP_LOGV("getFreeHeap", "%d", ESP.getFreeHeap());
+  */
   xEventGroupWaitBits(state.eg_Handle, EGBIG_CONFIGJSON, pdFALSE, pdTRUE, portMAX_DELAY);
   xTaskCreate(resTask, "resTask", 1024 * 8, NULL, state.taskindex++, NULL);
   xEventGroupWaitBits(state.eg_Handle, EGBIG_RES, pdFALSE, pdTRUE, portMAX_DELAY);
@@ -467,9 +480,6 @@ void setup()
         ESP_LOGV("mcu_dz003CallBack", "Queue is full"); } };
   xTaskCreate(dz003namespace::mainTask, "mcu_dz003Task", 1024 * 6, (void*)state.mcu_dz003TaskParam, state.taskindex++, NULL);
   xEventGroupWaitBits(state.eg_Handle, EGBIG_DZ003, pdFALSE, pdTRUE, portMAX_DELAY);
-
-  // interrupts(); // 打开全局所有中断
-  //  vTaskStartScheduler();//
 
   vTaskDelete(NULL);
 }

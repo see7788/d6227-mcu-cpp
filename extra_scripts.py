@@ -3,12 +3,15 @@ Import("env")
 # print(env.Dump())
 PIOENV=env.get("PIOENV")
 PROJECT_DIR = env.get("PROJECT_DIR") 
-toDir=os.path.abspath(PROJECT_DIR+"/data")
 os.chdir("../d6227-mcu-ts")
 print("当前：",os.getcwd())
 try:
+    toDir=os.path.abspath(PROJECT_DIR+"/data")
     cmd=f"esno src/script.ts --mode={PIOENV} --toDir={toDir}"
     # os.system(cmd)
+    env.Execute(cmd)
+    # toDir=os.path.abspath(PROJECT_DIR+"/"+PIOENV+"/data")
+    cmd=f"pnpm run build --mode={PIOENV} --toDir={toDir}"
     env.Execute(cmd)
 except Exception as e:
     print("错误",e)
