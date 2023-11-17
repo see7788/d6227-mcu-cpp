@@ -1,14 +1,16 @@
 #ifndef a7129namespace_h
 #define a7129namespace_h
 #include <Arduino.h>
+#include <myStruct_t.h>
 #include <tuple>
+#include <time.h>
+#include <Ticker.h>
 #include <vector>
 #include <unordered_map>
 #include <ArduinoJson.h>
 #include <freertos/queue.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
-#include <myStruct_t.h>
 #define SYSTEMCLOCK_REG 0x00
 #define PLL1_REG 0x01
 #define PLL2_REG 0x02
@@ -86,52 +88,52 @@ namespace a7129namespace
     **  Global Variable Declaration
     *********************************************************************/
     const Uint16 A7129Config[] = // 433MHz, 100kbps (IFBW = 100KHz, Fdev = 37.5KHz), Crystal=12.8MHz
-        {
-            0x0021, // SYSTEM CLOCK register,
-            0x0A21, // PLL1 register,
-            0xDA05, // PLL2 register,  433.301MHz
-            0x0000, // PLL3 register,
-            0x0A20, // PLL4 register,
-            0x0024, // PLL5 register,
-            0x0000, // PLL6 register,
-            0x0001, // CRYSTAL register,
-            0x0000, // PAGEA,
-            0x0000, // PAGEB,
-            0x18D4, // RX1 register,   IFBW=100KHz, ETH=1
-            0x7009, // RX2 register,   by preamble
-            0x4400, // ADC register,
-            0x0800, // PIN CONTROL register,   Use Strobe CMD
-            0x4845, // CALIBRATION register,
-            0x20C0  // MODE CONTROL register,  Use FIFO mode
+    {
+        0x0021, // SYSTEM CLOCK register,
+        0x0A21, // PLL1 register,
+        0xDA05, // PLL2 register,  433.301MHz
+        0x0000, // PLL3 register,
+        0x0A20, // PLL4 register,
+        0x0024, // PLL5 register,
+        0x0000, // PLL6 register,
+        0x0001, // CRYSTAL register,
+        0x0000, // PAGEA,
+        0x0000, // PAGEB,
+        0x18D4, // RX1 register,   IFBW=100KHz, ETH=1
+        0x7009, // RX2 register,   by preamble
+        0x4400, // ADC register,
+        0x0800, // PIN CONTROL register,   Use Strobe CMD
+        0x4845, // CALIBRATION register,
+        0x20C0  // MODE CONTROL register,  Use FIFO mode
     };
 
     const Uint16 A7129Config_PageA[] = // 433MHz, 100kbps (IFBW = 100KHz, Fdev = 37.5KHz), Crystal=12.8MHz
-        {
-            0x1706, // TX1 register,   Fdev = 37.5kHz
-            0x0000, // WOR1 register,
-            0x0000, // WOR2 register,
-            0x1187, // RFI register,   Enable Tx Ramp up/down
-            0x0170, // PM register,
-            0x0302, // RTH register,
-            0x400F, // AGC1 register,
-            0x0AC0, // AGC2 register,
-            0x0045, // GIO register,
-            0xD281, // CKO register
-            0x0004, // VCB register,
-            0x0A21, // CHG1 register,  430MHz
-            0x0022, // CHG2 register,  435MHz
-            0x003F, // FIFO register,  FEP=63+1=64bytes
-            0x1507, // CODE register,  Preamble=4bytes, ID=4bytes
-            0x0000  // WCAL register,
+    {
+        0x1706, // TX1 register,   Fdev = 37.5kHz
+        0x0000, // WOR1 register,
+        0x0000, // WOR2 register,
+        0x1187, // RFI register,   Enable Tx Ramp up/down
+        0x0170, // PM register,
+        0x0302, // RTH register,
+        0x400F, // AGC1 register,
+        0x0AC0, // AGC2 register,
+        0x0045, // GIO register,
+        0xD281, // CKO register
+        0x0004, // VCB register,
+        0x0A21, // CHG1 register,  430MHz
+        0x0022, // CHG2 register,  435MHz
+        0x003F, // FIFO register,  FEP=63+1=64bytes
+        0x1507, // CODE register,  Preamble=4bytes, ID=4bytes
+        0x0000  // WCAL register,
     };
 
     const Uint16 A7129Config_PageB[] = // 433MHz, 100kbps (IFBW = 100KHz, Fdev = 37.5KHz), Crystal=12.8MHz
-        {
-            0x0B37, // TX2 register,
-            0x8400, // IF1 register,   Enable Auto-IF, IF=200KHz
-            0x0000, // IF2 register,
-            0x0000, // ACK register,
-            0x0000  // ART register,
+    {
+        0x0B37, // TX2 register,
+        0x8400, // IF1 register,   Enable Auto-IF, IF=200KHz
+        0x0000, // IF2 register,
+        0x0000, // ACK register,
+        0x0000  // ART register,
     };
 
     /*********************************************************************
@@ -366,7 +368,7 @@ namespace a7129namespace
     {
         Uint8 i;
         Uint8 d1, d2, d3, d4;
-        Uint8 ID_Tab[8] = {0x54, 0x21, 0xA4, 0x23, 0xC7, 0x33, 0x45, 0xE7}; // ID code
+        Uint8 ID_Tab[8] = { 0x54, 0x21, 0xA4, 0x23, 0xC7, 0x33, 0x45, 0xE7 }; // ID code
         digitalWrite(SCS, LOW);
 
         ByteSend(CMD_ID_W);
@@ -503,10 +505,10 @@ namespace a7129namespace
         Uint8 CRC16_High, CRC16_Low;
         Uint8 CRC16_LookupHigh[16] = {
             0x00, 0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70,
-            0x81, 0x91, 0xA1, 0xB1, 0xC1, 0xD1, 0xE1, 0xF1};
+            0x81, 0x91, 0xA1, 0xB1, 0xC1, 0xD1, 0xE1, 0xF1 };
         Uint8 CRC16_LookupLow[16] = {
             0x00, 0x21, 0x42, 0x63, 0x84, 0xA5, 0xC6, 0xE7,
-            0x08, 0x29, 0x4A, 0x6B, 0x8C, 0xAD, 0xCE, 0xEF};
+            0x08, 0x29, 0x4A, 0x6B, 0x8C, 0xAD, 0xCE, 0xEF };
         typedef Uint8 rx_buff_t[64];
         typedef uint32_t id_t;
         typedef Uint8 type_t;
@@ -518,17 +520,23 @@ namespace a7129namespace
             state_t state;
         } idInfo_t;
         typedef std::unordered_map<id_t, idInfo_t> datas_t;
-        datas_t datas;
-        typedef std::tuple<String, datas_t> config_t;
+        typedef std::tuple<String, datas_t, int, int> config_t;
         QueueHandle_t crcRxQueueHandle;
         typedef struct
         {
-            int *taskindex;
-            config_t &config;
+            config_t& config;
             std::function<void(void)> startCallBack;
             std::function<void(void)> tickCallBack;
         } taskParam_t;
-        taskParam_t *param;
+        taskParam_t* param;
+        datas_t& datasRef(void)
+        {
+            return std::get<1>(param->config);
+        }
+        void timerCallBack(TimerHandle_t xTimer)
+        {
+            param->tickCallBack();
+        }
         void CRC16_Init(void)
         {
             CRC16_High = 0x1D;
@@ -553,7 +561,7 @@ namespace a7129namespace
             CRC16_Update4Bits(val >> 4);   // High nibble first
             CRC16_Update4Bits(val & 0x0F); // Low nibble
         }
-        void CRC_test(Uint8 *Payload, Uint8 length)
+        void CRC_test(Uint8* Payload, Uint8 length)
         {
             Uint8 i;
             CRC16_Init();
@@ -594,6 +602,7 @@ namespace a7129namespace
         }
         void send(id_t id, state_t state)
         {
+            datas_t& datas = datasRef();
             idInfo_t idInfo = datas[id];
             StrobeCMD(CMD_TX);
             Uint8 db[8]; // 需要发送的数据
@@ -613,6 +622,7 @@ namespace a7129namespace
         }
         void res(JsonVariant arr)
         {
+            datas_t& datas = datasRef();
             String api = arr[0].as<String>();
             if (api.indexOf(".datas.clear") > -1)
             {
@@ -623,7 +633,7 @@ namespace a7129namespace
             JsonObject data = arr.createNestedObject();
             JsonObject obj = data.createNestedObject("mcu_yblState");
             // ESP_LOGV("TAG", "%i", datas.size());
-            for (const auto &pair : datas)
+            for (const auto& pair : datas)
             {
                 //  ESP_LOGV("TAG", "ID: %u, Type: %u, State: %u", pair.second.id, pair.second.type, pair.second.state);
                 JsonObject dataObj = obj.createNestedObject(String(pair.second.id));
@@ -632,35 +642,30 @@ namespace a7129namespace
                 dataObj["state"] = pair.second.state;
             }
         }
-        void timerCallBack(TimerHandle_t xTimer)
+        void mainTask(void* ptr)
         {
-        }
-        void tickTask(void *ptr)
-        {
-            TickType_t pd_tick = pdMS_TO_TICKS(10000);
-            vTaskDelete(NULL);
-            while (1)
-            {
-                param->tickCallBack();
-                vTaskDelay(pd_tick);
-            }
-        }
-        void mainTask(void *ptr)
-        {
-            param = (taskParam_t *)ptr;
-            datas = std::get<1>(param->config);
+            param = (taskParam_t*)ptr;
+            datas_t& datas = datasRef();
             bool idadd = true;
-            TickType_t pd_tick = pdMS_TO_TICKS(500);
+            int& pd_tick = std::get<2>(param->config);
+            int& pd_bigTick = std::get<3>(param->config);
             InitRF(); // init RF,最后一个字段0x8E,0x12,0x86
             pinMode(GIO1, INPUT_PULLUP);
             attachInterrupt(GIO1, CRC_Rx, FALLING); // 创建中断
             StrobeCMD(CMD_RX);                      // 设为接收模式
-            TimerHandle_t timerHandle = xTimerCreate("yblTask.timerCallBack",
-                                                     1000,
-                                                     pdFALSE,
-                                                     (void *)0,
-                                                     timerCallBack);
-            xTaskCreate(tickTask, "yblTask.tickTask", 1024 * 4, (void *)param, *param->taskindex++, NULL);
+            TimerHandle_t tickTimer = xTimerCreate("yblTask.tickTimer",
+                1000,
+                pdFALSE,
+                (void*)0,
+                timerCallBack);
+            TimerHandle_t tickBigTimer = xTimerCreate("yblTask.tickBigTimer",
+                pdMS_TO_TICKS(pd_bigTick),
+                pdFALSE,
+                (void*)0,
+                timerCallBack);
+            xTimerStart(tickBigTimer, 0);
+            // Ticker tickBigTimer;
+            // tickBigTimer.attach(pd_bigTick/1000,test);
             rx_buff_t rx_buff;
             crcRxQueueHandle = xQueueCreate(5, sizeof(rx_buff));
             param->startCallBack();
@@ -668,7 +673,9 @@ namespace a7129namespace
             {
                 if (xQueueReceive(crcRxQueueHandle, &rx_buff, portMAX_DELAY) == pdPASS)
                 {
-                    id_t id_val = rx_buff[0] << 24 | rx_buff[1] << 16 | (rx_buff[5] & 0x0f) << 8 | ((rx_buff[5] & 0x3f) >> 4) * 2;
+                    // id_t id_val = rx_buff[0] << 24 | rx_buff[1] << 16 | (rx_buff[5] & 0x0f) << 8 | ((rx_buff[5] & 0x3f) >> 4) * 2;
+                    id_t id_val = static_cast<id_t>(rx_buff[0]) << 24 | static_cast<id_t>(rx_buff[1]) << 16 |
+                        (static_cast<id_t>(rx_buff[5]) & 0x0f) << 8 | ((static_cast<id_t>(rx_buff[5]) & 0x3f) >> 4) * 2;
                     if (idadd || datas.count(id_val) > 0)
                     {
                         state_t state_val = rx_buff[2];
@@ -676,16 +683,12 @@ namespace a7129namespace
                         datas[id_val] = {
                             .id = id_val,
                             .type = type_val,
-                            .state = state_val};
+                            .state = state_val };
                     }
-                    if (xTimerStart(timerHandle, pd_tick) == pdPASS)
-                    {
-                        param->tickCallBack();
-                    }
+                    xTimerStart(tickTimer, pdMS_TO_TICKS(pd_tick));
                 }
             }
         }
     };
-
 };
 #endif

@@ -2,8 +2,10 @@
 #define dz003namespace_h
 #include <ETH.h> //引用以使用ETH
 #include <Arduino.h>
+#include <myStruct_t.h>
 #include <ArduinoJson.h>
 #include <functional>
+#include <time.h>
 #include <tuple>
 #define ETH_ADDR 1
 #define ETH_POWER_PIN -1
@@ -123,7 +125,7 @@ namespace dz003namespace
             gpio[1] = c1;
             pinMode(gpio[0], INPUT);
             pinMode(gpio[1], INPUT);
-            // set(true);
+            set(true);
         }
     };
     typedef std::tuple<int, int, int, int, String> config_t; // sendTo_name,v0v1abs_c，v0v1absLoop_c，loopNumber_c，set0tick_c
@@ -194,17 +196,15 @@ namespace dz003namespace
     typedef struct
     {
         config_t &config;
-        Dz003Class obj;
         std::function<void(void)> startCallBack;
         std::function<void(void)> tickCallBack;
     } mainTaskParam_t;
+    Dz003Class *obj;
     void mainTask(void *ptr)
     {
         TickType_t tickCount = xTaskGetTickCount();
         mainTaskParam_t *c = (mainTaskParam_t *)ptr;
-        Dz003Class *obj = &c->obj;
-        int &log_0 = obj->frequency.log[0];
-        int &log_1 = obj->frequency.log[1];
+        obj = new Dz003Class();
         int &c_tick = std::get<0>(c->config);
         int &c_abs = std::get<1>(c->config);
         int &c_tickBig = std::get<2>(c->config);
@@ -217,9 +217,9 @@ namespace dz003namespace
         c->startCallBack();
         for (;;)
         {
-            log_0 = frequencyvalue[0];
-            log_1 = frequencyvalue[1];
-            int now_abs = std::abs(log_0 - log_1);
+            obj->frequency.log[0] = frequencyvalue[0];
+            obj->frequency.log[1] = frequencyvalue[1];
+            int now_abs = std::abs(obj->frequency.log[0] - obj->frequency.log[1]);
             c->tickCallBack();
             if (std::abs(now_abs - pre_abs) > c_abs)
             {
