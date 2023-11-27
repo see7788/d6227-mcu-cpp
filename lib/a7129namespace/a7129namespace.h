@@ -3,10 +3,10 @@
 #include <Arduino.h>
 #include <myStruct_t.h>
 #include <tuple>
+#include <unordered_map>
 #include <time.h>
 #include <Ticker.h>
 #include <vector>
-#include <unordered_map>
 #include <ArduinoJson.h>
 #include <freertos/queue.h>
 #include <freertos/FreeRTOS.h>
@@ -620,26 +620,27 @@ namespace a7129namespace
             StrobeCMD(CMD_PLL);
             StrobeCMD(CMD_RX); // 设置为接收模式
         }
-        void res(JsonVariant arr)
+        void res(JsonVariant refObj)
         {
             datas_t& datas = datasRef();
-            String api = arr[0].as<String>();
+            JsonObject obj = refObj.as<JsonObject>();
+            String api = obj["api"].as<String>();
             if (api.indexOf(".datas.clear") > -1)
             {
                 datas.clear();
             }
-            arr.clear();
-            arr[0].set("set");
-            JsonObject data = arr.createNestedObject();
-            JsonObject obj = data.createNestedObject("mcu_yblState");
+            obj["api"].set("mcu_yblState_set");
+            obj.remove("db");
+            JsonObject db = obj.createNestedObject("db");
+            JsonObject info = db.createNestedObject("mcu_yblState");
             // ESP_LOGV("TAG", "%i", datas.size());
             for (const auto& pair : datas)
             {
                 //  ESP_LOGV("TAG", "ID: %u, Type: %u, State: %u", pair.second.id, pair.second.type, pair.second.state);
-                JsonObject dataObj = obj.createNestedObject(String(pair.second.id));
-                dataObj["id"] = pair.second.id;
-                dataObj["type"] = pair.second.type;
-                dataObj["state"] = pair.second.state;
+                JsonObject infoObj = info.createNestedObject(String(pair.second.id));
+                infoObj["id"] = pair.second.id;
+                infoObj["type"] = pair.second.type;
+                infoObj["state"] = pair.second.state;
             }
         }
         void mainTask(void* ptr)

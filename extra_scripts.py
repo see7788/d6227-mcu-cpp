@@ -6,13 +6,13 @@ PROJECT_DIR = env.get("PROJECT_DIR")
 os.chdir("../d6227-mcu-ts")
 print("当前：",os.getcwd())
 try:
-    toDir=os.path.abspath(PROJECT_DIR+"/data")
-    cmd=f"esno src/script.ts --mode={PIOENV} --toDir={toDir}"
+    outDir=os.path.abspath(PROJECT_DIR+"/data")
+    cmd=f"esno src/script.ts --mode={PIOENV}_web --outDir={outDir}"
     # os.system(cmd)
     env.Execute(cmd)
-    # toDir=os.path.abspath(PROJECT_DIR+"/"+PIOENV+"/data")
-    cmd=f"pnpm run build --mode={PIOENV} --toDir={toDir}"
-    env.Execute(cmd)
+    # outDir=os.path.abspath(PROJECT_DIR+"/"+PIOENV+"/data")
+    # cmd=f"pnpm run build --mode={PIOENV}_web --outDir={outDir}"
+    # env.Execute(cmd)
 except Exception as e:
     print("错误",e)
 os.chdir(PROJECT_DIR)  # 返回原始工作目录

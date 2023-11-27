@@ -74,7 +74,7 @@ namespace dz003namespace
             pinMode(true_goio, OUTPUT);
         }
     };
-    volatile int frequencyvalue[2] = {0, 0};
+    volatile int frequencyvalue[2] = { 0, 0 };
     void frequencyvalue0_add(void)
     {
         //   noInterrupts ();关闭全局所有中断
@@ -144,35 +144,35 @@ namespace dz003namespace
             deng.set(!c);
             frequency.set(c);
         }
-        void res(JsonVariant arrRef)
+        void res(JsonVariant refObj)
         {
-            JsonArray arr = arrRef.as<JsonArray>();
-            String api = arr[0].as<String>();
+            JsonObject obj = refObj.as<JsonObject>();
+            String api = obj["api"].as<String>();
             if (api.indexOf(".fa.set") > -1)
             {
-                fa.set(arr[1].as<bool>());
+                fa.set(obj["db"].as<bool>());
             }
             else if (api.indexOf(".frequency.set") > -1)
             {
-                frequency.set(arr[1].as<bool>());
+                frequency.set(obj["db"].as<bool>());
             }
             else if (api.indexOf(".laba.set") > -1)
             {
-                laba.set(arr[1].as<bool>());
+                laba.set(obj["db"].as<bool>());
             }
             else if (api.indexOf(".deng.set") > -1)
             {
-                deng.set(arr[1].as<bool>());
+                deng.set(obj["db"].as<bool>());
             }
-            arr.clear();
-            arr[0].set("set");
-            JsonObject data = arr.createNestedObject();
-            JsonObject obj = data.createNestedObject("mcu_dz003State");
-            JsonObject c1 = obj.createNestedObject("fa");
+            obj["api"].set("mcu_dz003State_set");
+            obj.remove("db");
+            JsonObject db = obj.createNestedObject("db");
+            JsonObject info = db.createNestedObject("mcu_dz003State");
+            JsonObject c1 = info.createNestedObject("fa");
             c1["working"] = fa.working;
             c1["digitalRead"] = digitalRead(fa.gpio);
 
-            JsonObject c2 = obj.createNestedObject("frequency");
+            JsonObject c2 = info.createNestedObject("frequency");
             c2["working"] = frequency.working;
             JsonArray frread = c2.createNestedArray("digitalRead");
             frread.add(digitalRead(frequency.gpio[0]));
@@ -181,11 +181,11 @@ namespace dz003namespace
             frvalue.add(frequency.log[0]);
             frvalue.add(frequency.log[1]);
 
-            JsonObject c3 = obj.createNestedObject("laba");
+            JsonObject c3 = info.createNestedObject("laba");
             c3["working"] = laba.working;
             c3["digitalRead"] = digitalRead(laba.gpio);
 
-            JsonObject c4 = obj.createNestedObject("deng");
+            JsonObject c4 = info.createNestedObject("deng");
             c4["working"] = deng.working;
             JsonArray dengread = c4.createNestedArray("digitalRead");
             dengread.add(digitalRead(deng.false_goio));
@@ -195,21 +195,21 @@ namespace dz003namespace
 
     typedef struct
     {
-        config_t &config;
+        config_t& config;
         std::function<void(void)> startCallBack;
         std::function<void(void)> tickCallBack;
     } mainTaskParam_t;
-    Dz003Class *obj;
-    void mainTask(void *ptr)
+    Dz003Class* obj;
+    void mainTask(void* ptr)
     {
         TickType_t tickCount = xTaskGetTickCount();
-        mainTaskParam_t *c = (mainTaskParam_t *)ptr;
+        mainTaskParam_t* c = (mainTaskParam_t*)ptr;
         obj = new Dz003Class();
-        int &c_tick = std::get<0>(c->config);
-        int &c_abs = std::get<1>(c->config);
-        int &c_tickBig = std::get<2>(c->config);
-        int &c_absBig = std::get<3>(c->config);
-        String &sendTo = std::get<4>(c->config);
+        int& c_tick = std::get<0>(c->config);
+        int& c_abs = std::get<1>(c->config);
+        int& c_tickBig = std::get<2>(c->config);
+        int& c_absBig = std::get<3>(c->config);
+        String& sendTo = std::get<4>(c->config);
         obj->set(true);
         int pre_abs = 0;
         TickType_t pd_tick = pdMS_TO_TICKS(c_tick);

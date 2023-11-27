@@ -15,13 +15,13 @@
 
 class MyTcp
 {
-  WiFiClient *client;
-  void task(void *prtNull)
+  void task(void* prtNull)
   {
-    WiFiServer *tcpObj = new WiFiServer(88);
+    
+    WiFiServer tcpObj(88);
     for (;;)
     {
-      WiFiClient client = tcpObj->available(); // 检查是否有客户端连接
+      WiFiClient client = tcpObj.available(); // 检查是否有客户端连接
       if (client)
       {
         Serial.println("New client connected");
@@ -39,22 +39,23 @@ class MyTcp
       }
     }
   }
-  void send(const char *serverIP, const int serverPort)
+  void send(const char* serverIP, const int serverPort)
   {
-    if (client->connect(serverIP, serverPort))
+    WiFiClient client;
+
+    if (client.connect(serverIP, serverPort))
     {
       Serial.println("Connected to server");
 
       // 发送数据到服务器
       String data = "Hello from ESP32";
-      client->print(data);
-      client->flush(); // 刷新缓冲区
+      client.print(data);
+      client.flush(); // 刷新缓冲区
 
       // 从服务器接收响应
-      String response = client->readStringUntil('\n');
+      String response = client.readStringUntil('\n');
       Serial.println("Response from server: " + response);
-
-      client->stop(); // 关闭客户端连接
+      client.stop(); // 关闭客户端连接
       Serial.println("Client disconnected");
     }
     else

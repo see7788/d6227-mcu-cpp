@@ -106,8 +106,6 @@ public:
         if (c)
         {
             merge(obj, doc);
-        }else{
-            ESP_LOGE("", " %s", "readFile(doc) error");
         }
         return c;
     }

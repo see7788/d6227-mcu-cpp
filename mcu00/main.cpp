@@ -38,7 +38,7 @@
 #define EGBIG_DZ003 (1 << 5)
 typedef struct
 {
-  std::tuple<String, String, String, String> mcu_base;
+  std::tuple<String, String, String, String, String> mcu_base;
   std::tuple<String, int, String> mcu_serial;
   MyNet::config_t mcu_net;
   dz003namespace::config_t mcu_dz003;
@@ -63,6 +63,7 @@ typedef struct
   dz003namespace::mainTaskParam_t* mcu_dz003TaskParam;
   a7129namespace::ybl::taskParam_t* mcu_yblTaskParam;
   MyWebServer* mcu_webServer;
+  myBle::Index* mcu_ble;
 } state_t;
 state_t state;
 void esp_eg_on(void* registEr, esp_event_base_t postEr, int32_t eventId, void* eventData)
@@ -100,7 +101,7 @@ void config_set(JsonVariant obj)
   if (obj.containsKey("mcu_base"))
   {
     JsonArray json_base = obj["mcu_base"].as<JsonArray>();
-    config.mcu_base = std::make_tuple(json_base[0].as<String>(), json_base[1].as<String>(), json_base[2].as<String>(), json_base[3].as<String>());
+    config.mcu_base = std::make_tuple(json_base[0].as<String>(), json_base[1].as<String>(), json_base[2].as<String>(), json_base[3].as<String>(), json_base[4].as<String>());
   }
   if (obj.containsKey("mcu_serial"))
   {
@@ -160,6 +161,7 @@ void config_get(JsonVariant obj)
   json_base.add(std::get<1>(config.mcu_base));
   json_base.add(std::get<2>(config.mcu_base));
   json_base.add(std::get<3>(config.mcu_base));
+  json_base.add(std::get<4>(config.mcu_base));
   JsonArray json_serial = obj.createNestedArray("mcu_serial");
   json_serial.add(std::get<0>(config.mcu_serial));
   json_serial.add(std::get<1>(config.mcu_serial));
@@ -210,22 +212,24 @@ void reqTask(void* nullparam)
     {
       if (myStruct.sendTo_name == "mcu_esServer" && state.mcu_webServer->esObj == nullptr) {
         concatAny(myStruct.str, "[\"state.mcu_webServer->esObj==nullptr\",\"%s\"]", myStruct.str.c_str());
-        myStruct.sendTo_name = std::get<3>(config.mcu_base);
+        myStruct.sendTo_name = "mcu_serial";
       }
       else if (myStruct.sendTo_name == "mcu_wsServer" && state.mcu_webServer->wsObj == nullptr) {
         concatAny(myStruct.str, "[\"state.mcu_webServer->wsObj==nullptr\",\"%s\"]", myStruct.str.c_str());
-        myStruct.sendTo_name = std::get<3>(config.mcu_base);
+        myStruct.sendTo_name = "mcu_serial";
       }
-
-      if (myStruct.sendTo_name == "mcu_esServer" && state.mcu_webServer->esObj != nullptr) {
+      else if (myStruct.sendTo_name.isEmpty()) {
+        concatAny(myStruct.str, "[\"sendTo_name.isEmpty()\",\"%s\"]", myStruct.str.c_str());
+        myStruct.sendTo_name = "mcu_serial";
+      }
+      if (myStruct.sendTo_name == "mcu_esServer") {
         state.mcu_webServer->esObj->send(myStruct.str.c_str());
       }
-      else if (myStruct.sendTo_name == "mcu_wsServer" && state.mcu_webServer->esObj != nullptr) {
+      else if (myStruct.sendTo_name == "mcu_wsServer") {
         state.mcu_webServer->wsObj->textAll(myStruct.str);
       }
       else
       {
-        //concatAny(myStruct.str, "[\"myStruct.sendTo_name error\",\"%s\"]", myStruct.str.c_str());
         state.mcu_serial->println(myStruct.str);
       }
       vTaskDelay(50);
@@ -247,32 +251,47 @@ void resTask(void* nullparam)
     // if (xTaskNotifyWait(pdFALSE, ULONG_MAX, (uint32_t *)&ptr, portMAX_DELAY) == pdPASS)
     // {
     //  myStruct = *(structTypenamespace::myJsonArray_t *)ptr;
+    myStruct_t reqStruct;
+    auto sendToDebug = [&reqStruct, &resStruct](String str) {
+      reqStruct.sendTo_name = std::get<3>(config.mcu_base);
+      concatAny(reqStruct.str, "[\"%s\",\"%s\"]", str.c_str(), resStruct.str.c_str());
+      if (xQueueSend(state.reqQueueHandle, &reqStruct, 0) != pdPASS)
+      {
+        ESP_LOGD("resTask", "reqQueueHandle is full");
+      }
+      };
     if (xQueueReceive(state.resQueueHandle, &resStruct, portMAX_DELAY) == pdPASS)
     {
       DynamicJsonDocument resdoc(3000);
       DeserializationError error = deserializeJson(resdoc, resStruct.str);
-      myStruct_t reqStruct;
       if (error)
       {
-        concatAny(reqStruct.str, "[\"resTask error\",\"%s\",\"%s\"]", error.c_str(), resStruct.str.c_str());
-        if (xQueueSend(state.reqQueueHandle, &reqStruct, 0) != pdPASS)
-        {
-          ESP_LOGD("resTask", "reqQueueHandle is full");
-        }
+        sendToDebug("deserializeJson Error");
       }
       else
       {
+        JsonObject root = resdoc.as<JsonObject>();
+        String api = root["api"].as<String>();
+        auto sendToFun = [root, &resStruct, &reqStruct]() {
+          //arr.add(std::get<4>(config.mcu_base));
+          reqStruct.sendTo_name = resStruct.sendTo_name;
+          serializeJson(root, reqStruct.str);
+          if (xQueueSend(state.reqQueueHandle, &reqStruct, 0) != pdPASS)
+          {
+            ESP_LOGE("resJsonArray", "reqQueueHandle is full");
+          }
+          };
         if (xSemaphoreTake(state.configLock, portMAX_DELAY) == pdTRUE)
         {
-          JsonArray arr = resdoc.as<JsonArray>();
-          String api = arr[0].as<String>();
-          if (api == "init_get")
+          if (root["token"].as<String>() != std::get<4>(config.mcu_base)) {
+            sendToDebug("token error");
+          }
+          else if (api == "mcu_state_get")
           {
-            arr.clear();
-            arr.add("set");
-            JsonObject obj = arr.createNestedObject();
-            config_get(obj);
-            JsonArray mcu_state = obj.createNestedArray("mcu_state");
+            root["api"].set("set");
+            JsonObject db = root.createNestedObject("db");
+            config_get(db);
+            JsonArray mcu_state = db.createNestedArray("mcu_state");
             uint32_t ulBits = xEventGroupGetBits(state.eg_Handle); // 获取 Event Group 变量当前值
             mcu_state.add(state.macId);
             JsonArray egBit = mcu_state.createNestedArray();
@@ -291,84 +310,93 @@ void resTask(void* nullparam)
             mcu_state.add(ETH.localIP().toString());
             mcu_state.add(WiFi.localIP().toString());
             mcu_state.add(state.taskindex);
-            // JsonObject i18n = obj.createNestedObject("i18n");
-            // state.i18n->readFile(i18n);
+            sendToFun();
+          }
+          else if (api == "i18n_get") {
+            root["api"].set("set");
+            JsonObject db = root.createNestedObject("db");
+            if (state.i18nFs->readFile(db))
+              sendToFun();
+            else
+              sendToDebug("i18nFs->readFile error");
+          }
+          else if (api == "i18n_set") {
+            root["api"].set("set");
+            JsonObject db = root["db"].as<JsonObject>();
+            if (state.i18nFs->writeFile(db))
+              sendToFun();
+            else
+              sendToDebug("i18nFs->writeFile error");
           }
           else if (api == "config_set")
           {
-            JsonObject obj = arr[1].as<JsonObject>();
-            config_set(obj);
+            JsonObject db = root["db"].as<JsonObject>();
+            config_set(db);
+            sendToFun();
           }
           else if (api == "config_get")
           {
-            arr.clear();
-            arr.add("config_set");
-            JsonObject obj = arr.createNestedObject();
-            config_get(obj);
+            root["api"].set("config_set");
+            JsonObject db = root.createNestedObject("db");
+            config_get(db);
+            sendToFun();
           }
-          else if (api == "config_toFile")
+          else if (api == "config_toFileRestart")
           {
-            arr.clear();
-            arr.add("config_set");
-            JsonObject obj = arr.createNestedObject();
-            config_get(obj);
-            bool success = state.configFs->writeFile(obj);
-            if (!success)
+            root["api"].set("config_set");
+            JsonObject db = root.createNestedObject("db");
+            config_get(db);
+            bool success = state.configFs->writeFile(db);
+            if (success)
             {
-              return;
+              sendToFun();
+              vTaskDelay(pdMS_TO_TICKS(300));
+              ESP.restart();
+            }
+            else {
+              sendToDebug("configFs->writeFile error");
             }
           }
-          else if (api == "config_fromFile")
+          else if (api == "config_fromFileRestart")
           {
-            arr.clear();
-            arr.add("config_set");
-            JsonObject obj = arr.createNestedObject();
-            bool success = state.configFs->readFile(obj);
-            if (!success)
+            root["api"].set("config_set");
+            JsonObject db = root.createNestedObject("db");
+            bool success = state.configFs->readFile(db);
+            if (success)
             {
-              return;
+              sendToFun();
+              vTaskDelay(pdMS_TO_TICKS(300));
+              ESP.restart();
             }
-            config_set(obj);
-          }
-          else if (api == "restart")
-          {
-            ESP.restart();
+            else {
+              sendToDebug("configFs->readFile error");
+            }
           }
           else if (api.indexOf("mcu_dz003") > -1)
           {
-            dz003namespace::obj->res(arr);
+            dz003namespace::obj->res(root);
+            sendToFun();
           }
           else if (api.indexOf("mcu_ybl") > -1)
           {
-            a7129namespace::ybl::res(arr);
+            a7129namespace::ybl::res(root);
+            sendToFun();
           }
           else
           {
-            arr[0].set("mcu pass");
-            arr[1].set(api);
+            sendToDebug("api error");
           }
           xSemaphoreGive(state.configLock);
-          reqStruct.sendTo_name = resStruct.sendTo_name;
-          JsonArray mcu_base = arr.createNestedArray();
-          mcu_base.add(std::get<0>(config.mcu_base));
-          mcu_base.add(std::get<1>(config.mcu_base));
-          mcu_base.add(std::get<2>(config.mcu_base));
-          serializeJson(arr, reqStruct.str);
-          // Serial.println(resdoc.overflowed());
-          if (xQueueSend(state.reqQueueHandle, &reqStruct, 0) != pdPASS)
-          {
-            ESP_LOGE("resJsonArray", "reqQueueHandle is full");
-          }
         }
         else
         {
-          ESP_LOGE("resJsonArray", "xSemaphoreTake !=pdFALSE");
+          sendToDebug("configLock error");
         }
       }
     }
     else
     {
-      ESP_LOGD("resTask", "resTask xQueueReceive != pdPASS");
+      sendToDebug("resTask xQueueReceive != pdPASS");
     }
   }
 }
@@ -379,9 +407,9 @@ void setup()
   state.macId = String(ESP.getEfuseMac());
   state.eg_Handle = xEventGroupCreate();
   state.configLock = xSemaphoreCreateMutex();
-  state.mcu_serial = &Serial;
   state.reqQueueHandle = xQueueCreate(10, sizeof(myStruct_t));
   state.resQueueHandle = xQueueCreate(10, sizeof(myStruct_t));
+  state.mcu_serial = &Serial;
   state.configFs = new MyFs("/config.json");
   state.i18nFs = new MyFs("/i18n.json");
   // state.configFs->listFilePrint("/", 5);
@@ -423,6 +451,9 @@ void setup()
   ESP_ERROR_CHECK(esp_event_handler_register(ETH_EVENT, ESP_EVENT_ANY_ID, esp_eg_on, (void*)__func__));
   ESP_ERROR_CHECK(esp_event_handler_register(SC_EVENT, ESP_EVENT_ANY_ID, esp_eg_on, (void*)__func__));
 
+  state.mcu_ble = new myBle::Index("myble");
+  state.mcu_ble->serverInit("abcd");
+
   state.mcu_serial->begin(std::get<1>(config.mcu_serial));
   state.mcu_serial->onReceive([]()
     {
@@ -436,17 +467,18 @@ void setup()
         portYIELD_FROM_ISR(xHigherPriorityTaskWoken); });
 
   state.mcu_net = new MyNet(config.mcu_net);
+  state.mcu_net->init();
   xEventGroupWaitBits(state.eg_Handle, EGBIG_NET, pdFALSE, pdTRUE, portMAX_DELAY);
 
   state.mcu_webServer = new MyWebServer(80);
   state.mcu_webServer->webPageServerInit(config.mcu_webPageServer);
   state.mcu_webServer->wsServerInit(config.mcu_wsServer, [](const String& str) -> void
     {
-      myStruct_t obj = {
-        .sendTo_name = std::get<1>(config.mcu_wsServer),
-        .str = str };
+      myStruct_t obj;
+      obj.sendTo_name = std::get<1>(config.mcu_wsServer);
+      obj.str = str;
       if (xQueueSend(state.resQueueHandle, &obj, 50) != pdPASS)
-        ESP_LOGV("mcu_dz003CallBack", "Queue is full"); });
+        ESP_LOGV("mcu_webServer", "Queue is full"); });
   state.mcu_webServer->esServerInit(config.mcu_esServer);
   state.mcu_webServer->arduinoOtaInit([](const String& message) -> void
     { ESP_LOGV("debug", "%s", message); });
@@ -458,9 +490,9 @@ void setup()
        ESP_LOGV("ETBIG", "EGBIG_YBL"); },
       .tickCallBack = []()
       {
-        myStruct_t obj = {
-          .sendTo_name = std::get<0>(config.mcu_ybl),
-          .str = "[\"mcu_ybl\"]"};
+        myStruct_t obj;
+        obj.sendTo_name = std::get<0>(config.mcu_ybl);
+        concatAny(obj.str,"{\"api\":\"mcu_ybl\",\"token\":\"%s\"}",std::get<4>(config.mcu_base).c_str());
         if (xQueueSend(state.resQueueHandle, &obj, 50) != pdPASS)
            ESP_LOGV("mcu_yblCallBack", "Queue is full"); } };
   xTaskCreate(a7129namespace::ybl::mainTask, "mcu_yblTask", 1024 * 6, (void*)state.mcu_yblTaskParam, state.taskindex++, NULL);
@@ -473,9 +505,9 @@ void setup()
        ESP_LOGV("ETBIG", "EGBIG_DZ003"); },
       .tickCallBack = []()
       {
-        myStruct_t obj = {
-          .sendTo_name = std::get<4>(config.mcu_dz003),
-          .str = "[\"mcu_dz003\"]"};
+        myStruct_t obj;
+        obj.sendTo_name = std::get<4>(config.mcu_dz003);
+        concatAny(obj.str, "{\"api\":\"mcu_dz003\",\"token\":\"%s\"}", std::get<4>(config.mcu_base).c_str());
       if (xQueueSend(state.resQueueHandle, &obj, 50) != pdPASS)
         ESP_LOGV("mcu_dz003CallBack", "Queue is full"); } };
   xTaskCreate(dz003namespace::mainTask, "mcu_dz003Task", 1024 * 6, (void*)state.mcu_dz003TaskParam, state.taskindex++, NULL);
