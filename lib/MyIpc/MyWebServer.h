@@ -209,7 +209,6 @@ public:
         else if (error == OTA_CONNECT_ERROR) callback("ArduinoOTA.OTA_CONNECT_ERROR");
         else if (error == OTA_RECEIVE_ERROR) callback("ArduinoOTA.OTA_RECEIVE_ERROR");
         else if (error == OTA_END_ERROR) callback("ArduinoOTA.OTA_END_ERROR"); });
-
     ArduinoOTA.begin();
   }
 };

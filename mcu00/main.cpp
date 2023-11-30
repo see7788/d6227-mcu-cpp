@@ -20,16 +20,17 @@
 #include <Arduino.h>
 #include <IPAddress.h>
 #include <SPIFFS.h>
+#include <HTTPClient.h>
 #include <ArduinoJson.h>
-#include <HardwareSerial.h>//硬串口,Software Serial软串口
-#include <ESPAsyncWebServer.h>
 #include <myStruct_t.h>
 #include <dz003namespace.h>
 #include <a7129namespace.h>
 #include <MyFs.h>
 #include <MyNet.h>
 #include <MyWebServer.h>
-#include <MyBle.h>
+#include <myBlenamespace.h>
+// #include <HardwareSerial.h>//硬串口,Software Serial软串口
+
 #define EGBIG_CONFIGJSON (1 << 0)
 #define EGBIG_REQ (1 << 1)
 #define EGBIG_RES (1 << 2)
@@ -63,7 +64,7 @@ typedef struct
   dz003namespace::mainTaskParam_t* mcu_dz003TaskParam;
   a7129namespace::ybl::taskParam_t* mcu_yblTaskParam;
   MyWebServer* mcu_webServer;
-  myBle::Index* mcu_ble;
+  myBlenamespace::Index* mcu_ble;
 } state_t;
 state_t state;
 void esp_eg_on(void* registEr, esp_event_base_t postEr, int32_t eventId, void* eventData)
@@ -451,7 +452,7 @@ void setup()
   ESP_ERROR_CHECK(esp_event_handler_register(ETH_EVENT, ESP_EVENT_ANY_ID, esp_eg_on, (void*)__func__));
   ESP_ERROR_CHECK(esp_event_handler_register(SC_EVENT, ESP_EVENT_ANY_ID, esp_eg_on, (void*)__func__));
 
-  state.mcu_ble = new myBle::Index("myble");
+  state.mcu_ble = new myBlenamespace::Index("myble");
   state.mcu_ble->serverInit("abcd");
 
   state.mcu_serial->begin(std::get<1>(config.mcu_serial));

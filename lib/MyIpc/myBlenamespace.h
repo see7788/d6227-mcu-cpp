@@ -1,5 +1,5 @@
-#ifndef MyBle_h
-#define MyBle_h
+#ifndef myBlenamespace_h
+#define myBlenamespace_h
 #include <Arduino.h>
 #include <functional>
 #include <BLE2902.h>
@@ -13,7 +13,7 @@
 #include <BLEBeacon.h>
 #include <vector>
 #include <esp_log.h>
-namespace myBle {
+namespace myBlenamespace {
 
     class MyBLEClientCallbacks : public BLEClientCallbacks {
     public:
