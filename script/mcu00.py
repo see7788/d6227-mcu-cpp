@@ -7,12 +7,8 @@ try:
     outDir = os.path.abspath(PROJECT_DIR+"/data")
     os.chdir("../d6227-ts")
     print("当前：", os.getcwd())
-    cmd=f"esno src/mcu00_web/script.ts --outDir={outDir}"
+    cmd=f"esno src/cpp_mcu00_web/cppUse.ts --outDir={outDir}"
     env.Execute(cmd)
-    # os.system(cmd)
-    # outDir=os.path.abspath(PROJECT_DIR+"/"+PIOENV+"/data")
-    # cmd=f"pnpm run build --mode={PIOENV}_web --outDir={outDir}"
-    # env.Execute(cmd)
 except Exception as e:
     print("错误", e)
 os.chdir(PROJECT_DIR)  # 返回原始工作目录

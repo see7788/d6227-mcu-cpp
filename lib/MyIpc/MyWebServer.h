@@ -113,7 +113,7 @@ public:
           callback(msg);
         }
         else {
-          callback("ws type ");
+          callback("mcu 不认识的事件 ");
         } });
     serverObj->addHandler(wsObj);
   }
