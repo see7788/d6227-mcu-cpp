@@ -29,8 +29,8 @@ public:
     DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "*");
     serverObj->begin();
   }
-  typedef std::tuple<String> webPageServer_t;
-  void webPageServerInit(webPageServer_t &c)
+  typedef std::tuple<String> webPageConfig_t;
+  void webPageServerInit(webPageConfig_t &c)
   {
     String &internetPath=std::get<0>(c);
     serverObj->on("/", HTTP_GET, [&internetPath](AsyncWebServerRequest* request)
@@ -49,16 +49,16 @@ public:
       { request->send(404, "text/plain", "Not found"); });
     serverObj->serveStatic("/", SPIFFS, "/"); //.setDefaultFile("index.htm");
   }
-  typedef std::tuple<String> esServer_t;
-  void esServerInit(esServer_t &c)
+  typedef std::tuple<String> esConfig_t;
+  void esServerInit(esConfig_t &c)
   {
     esObj = new AsyncEventSource(std::get<0>(c));
     esObj->onConnect([](AsyncEventSourceClient* client)
       { client->send("es hello!", NULL, millis(), 1000); });
     serverObj->addHandler(esObj);
   }
-  typedef std::tuple<String,String> wsServer_t;
-  void wsServerInit(wsServer_t &c, std::function<void(const String&)> callback)
+  typedef std::tuple<String,String> wsConfig_t;
+  void wsServerInit(wsConfig_t &c, std::function<void(const String&)> callback)
   {
     wsObj = new AsyncWebSocket(std::get<0>(c));
     wsObj->onEvent([callback](AsyncWebSocket* server, AsyncWebSocketClient* client, AwsEventType type, void* arg, uint8_t* data, size_t len)
