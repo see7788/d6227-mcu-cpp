@@ -28,7 +28,7 @@
 #include <MyFs.h>
 #include <MyNet.h>
 #include <MyWebServer.h>
-#include <myBlenamespace.h>
+// #include <myBlenamespace.h>
 // #include <HardwareSerial.h>//硬串口,Software Serial软串口
 
 #define EGBIG_CONFIGJSON (1 << 0)
@@ -64,7 +64,7 @@ typedef struct
   dz003namespace::mainTaskParam_t* mcu_dz003TaskParam;
   a7129namespace::ybl::taskParam_t* mcu_yblTaskParam;
   MyWebServer* mcu_webServer;
-  myBlenamespace::Index* mcu_ble;
+  // myBlenamespace::Index* mcu_ble;
 } state_t;
 state_t state;
 void esp_eg_on(void* registEr, esp_event_base_t postEr, int32_t eventId, void* eventData)
@@ -241,6 +241,9 @@ void reqTask(void* nullparam)
     }
   }
 }
+bool token(String str) {
+  return  str == std::get<4>(config.mcu_base);
+}
 void resTask(void* nullparam)
 {
   // uint32_t ptr;
@@ -284,10 +287,7 @@ void resTask(void* nullparam)
           };
         if (xSemaphoreTake(state.configLock, portMAX_DELAY) == pdTRUE)
         {
-          if (root["token"].as<String>() != std::get<4>(config.mcu_base)) {
-            sendToDebug("token error");
-          }
-          else if (api == "mcu_state_get")
+          if (api == "mcu_state_get")
           {
             root["api"].set("set");
             JsonObject db = root.createNestedObject("db");
@@ -452,8 +452,8 @@ void setup()
   ESP_ERROR_CHECK(esp_event_handler_register(ETH_EVENT, ESP_EVENT_ANY_ID, esp_eg_on, (void*)__func__));
   ESP_ERROR_CHECK(esp_event_handler_register(SC_EVENT, ESP_EVENT_ANY_ID, esp_eg_on, (void*)__func__));
 
-  state.mcu_ble = new myBlenamespace::Index("myble");
-  state.mcu_ble->serverInit("abcd");
+  // state.mcu_ble = new myBlenamespace::Index("myble");
+  // state.mcu_ble->serverInit("abcd");
 
   state.mcu_serial->begin(std::get<1>(config.mcu_serial));
   state.mcu_serial->onReceive([]()
