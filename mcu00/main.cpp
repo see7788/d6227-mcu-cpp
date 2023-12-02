@@ -27,7 +27,8 @@
 #include <a7129namespace.h>
 #include <MyFs.h>
 #include <MyNet.h>
-#include <MyWebServer.h>
+#include <MyServer.h>
+#include <MyClient.h>
 // #include <myBlenamespace.h>
 // #include <HardwareSerial.h>//硬串口,Software Serial软串口
 
@@ -44,9 +45,9 @@ typedef struct
   MyNet::config_t mcu_net;
   dz003namespace::config_t mcu_dz003;
   a7129namespace::ybl::config_t mcu_ybl;
-  MyWebServer::webPageServer_t mcu_webPageServer;
-  MyWebServer::wsServer_t mcu_wsServer;
-  MyWebServer::esServer_t mcu_esServer;
+  MyServer::webPageServer_t mcu_webPageServer;
+  MyServer::wsServer_t mcu_wsServer;
+  MyServer::esServer_t mcu_esServer;
 } config_t;
 config_t config;
 typedef struct
@@ -63,7 +64,7 @@ typedef struct
   HardwareSerial* mcu_serial;
   dz003namespace::mainTaskParam_t* mcu_dz003TaskParam;
   a7129namespace::ybl::taskParam_t* mcu_yblTaskParam;
-  MyWebServer* mcu_webServer;
+  MyServer* mcu_webServer;
   // myBlenamespace::Index* mcu_ble;
 } state_t;
 state_t state;
@@ -419,26 +420,22 @@ void setup()
   state.configFs->readFile(obj); // 与下行代码交换位置，会不正常
   config_set(obj);
   xEventGroupSetBits(state.eg_Handle, EGBIG_CONFIGJSON);
+
   /*
-  obj["t"] = "config.json";
-  serializeJson(obj, *state.mcu_serial);
-  ESP_LOGV("ETBIG", "CONFIGJSON");
-  ESP_LOGV("getFreeHeap", "%d", ESP.getFreeHeap());
-  doc.clear();
-  config_get(obj);
-  obj["t"] = "config_get";
-  serializeJson(obj, *state.mcu_serial);
-  ESP_LOGV("getFreeHeap", "%d", ESP.getFreeHeap());
-  doc.clear();
-  state.i18nFs->readFile(obj);
-  serializeJson(obj, *state.mcu_serial);
-  ESP_LOGV("getFreeHeap", "%d", ESP.getFreeHeap());
-  */
-  xEventGroupWaitBits(state.eg_Handle, EGBIG_CONFIGJSON, pdFALSE, pdTRUE, portMAX_DELAY);
-  xTaskCreate(resTask, "resTask", 1024 * 8, NULL, state.taskindex++, NULL);
-  xEventGroupWaitBits(state.eg_Handle, EGBIG_RES, pdFALSE, pdTRUE, portMAX_DELAY);
-  xTaskCreate(reqTask, "reqTask", 1024 * 4, NULL, state.taskindex++, NULL);
-  xEventGroupWaitBits(state.eg_Handle, EGBIG_REQ, pdFALSE, pdTRUE, portMAX_DELAY);
+    obj["t"] = "config.json";
+    serializeJson(obj, *state.mcu_serial);
+    ESP_LOGV("ETBIG", "CONFIGJSON");
+    ESP_LOGV("getFreeHeap", "%d", ESP.getFreeHeap());
+    doc.clear();
+    config_get(obj);
+    obj["t"] = "config_get";
+    serializeJson(obj, *state.mcu_serial);
+    ESP_LOGV("getFreeHeap", "%d", ESP.getFreeHeap());
+    doc.clear();
+    state.i18nFs->readFile(obj);
+    serializeJson(obj, *state.mcu_serial);
+    ESP_LOGV("getFreeHeap", "%d", ESP.getFreeHeap());
+    */
 
   ESP_ERROR_CHECK(esp_task_wdt_init(20000, false)); // 初始化看门狗
   ESP_ERROR_CHECK(esp_task_wdt_add(NULL));
@@ -454,6 +451,12 @@ void setup()
 
   // state.mcu_ble = new myBlenamespace::Index("myble");
   // state.mcu_ble->serverInit("abcd");
+
+  xEventGroupWaitBits(state.eg_Handle, EGBIG_CONFIGJSON, pdFALSE, pdTRUE, portMAX_DELAY);
+  xTaskCreate(resTask, "resTask", 1024 * 8, NULL, state.taskindex++, NULL);
+  xEventGroupWaitBits(state.eg_Handle, EGBIG_RES, pdFALSE, pdTRUE, portMAX_DELAY);
+  xTaskCreate(reqTask, "reqTask", 1024 * 4, NULL, state.taskindex++, NULL);
+  xEventGroupWaitBits(state.eg_Handle, EGBIG_REQ, pdFALSE, pdTRUE, portMAX_DELAY);
 
   state.mcu_serial->begin(std::get<1>(config.mcu_serial));
   state.mcu_serial->onReceive([]()
@@ -471,7 +474,7 @@ void setup()
   state.mcu_net->init();
   xEventGroupWaitBits(state.eg_Handle, EGBIG_NET, pdFALSE, pdTRUE, portMAX_DELAY);
 
-  state.mcu_webServer = new MyWebServer(80);
+  state.mcu_webServer = new MyServer(80);
   state.mcu_webServer->webPageServerInit(config.mcu_webPageServer);
   state.mcu_webServer->wsServerInit(config.mcu_wsServer, [](const String& str) -> void
     {

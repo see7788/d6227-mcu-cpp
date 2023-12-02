@@ -1,5 +1,5 @@
-#ifndef MyWebServer_h
-#define MyWebServer_h
+#ifndef MyServer_h
+#define MyServer_h
 #include <Arduino.h>
 #include <esp_log.h>
 #include <SPIFFS.h>
@@ -17,14 +17,13 @@
 #include <freertos/task.h>
 #include <freertos/event_groups.h>
 
-class MyWebServer
+class MyServer
 {
-
 public:
   AsyncWebServer* serverObj;
   AsyncWebSocket* wsObj;
   AsyncEventSource* esObj;
-  MyWebServer(uint16_t port):wsObj(nullptr), esObj(nullptr) 
+  MyServer(uint16_t port):wsObj(nullptr), esObj(nullptr) 
   {
     serverObj = new AsyncWebServer(port);
     DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "*");
