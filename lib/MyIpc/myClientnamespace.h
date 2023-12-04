@@ -11,8 +11,8 @@
 namespace myClientnamespace {
   class WsClient
   {
-    bool ipcIng;
   public:
+    bool ipcIng;
     websockets::WebsocketsClient obj;
     typedef std::tuple<String, websockets::WSInterfaceString, websockets::WSInterfaceString> config_t;
     typedef struct
@@ -22,6 +22,9 @@ namespace myClientnamespace {
       std::function<void(String)> msgCallBack;
     } param_t;
     param_t* param;
+    void connect(void) {
+      ipcIng = obj.connect("39.97.216.195", 6014, "/");
+    }
     WsClient(param_t* _param) :obj(websockets::WebsocketsClient()), ipcIng(false), param(_param) {
       obj.onEvent([this](websockets::WebsocketsEvent event, String data)
         {
@@ -34,33 +37,23 @@ namespace myClientnamespace {
           else if (event == websockets::WebsocketsEvent::ConnectionClosed)
           {
             ipcIng = false;
-            ESP_LOGV("debug", "ipcIng false");
+            ESP_LOGV("debug", "ipcIng Closed");
+            // vTaskDelay(3000);
+            // connect();
           }
         });
       obj.onMessage([this](websockets::WebsocketsMessage message)
         {
           param->msgCallBack(message.data());
         });
-    }
-    void connect(void) {
-      //  if (!ipcIng) {
-      ipcIng = obj.connect("39.97.216.195", 6014, "/");
-      // if (!ipcIng) {
-      //   obj.close();
-      //   vTaskDelay(3000);
-      //   connect();
-      // }
-      // }
+      param->startCallBack();
     }
     void send(String str)
     {
-      if (ipcIng) {
+      if (ipcIng)
         obj.send(str);
-      }
-      else {
-        connect();
-        obj.send(str);
-      }
+      // else
+      //   ESP_LOGV("debug", "ipcIng false");
     }
   };
   void wsTask(void* ptr)
@@ -69,6 +62,7 @@ namespace myClientnamespace {
     op->connect();
     while (true)
     {
+      op->send("test");
       if (op->obj.available())
       {
         op->obj.poll();

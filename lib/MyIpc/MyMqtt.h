@@ -1,29 +1,28 @@
 #ifndef MyMqtt_h
 #define MyMqtt_h
 #include "Arduino.h"
-#include <Ethernet.h>
 #include <WiFi.h>
+// #include <Ethernet.h>
+//#include <AsyncMqttClient.h>
 #include <PubSubClient.h>
 class MyMqtt
 {
 private:
-    uint64_t mac;
     PubSubClient obj;
-    void callBackDemo(char* topic, byte* payload, unsigned int length) {
+    void mqttcallBack(char* topic, byte* payload, unsigned int length) {
         for (uint8_t i = 0; i < length; i++) {
             Serial.write(payload[i]);
         }
         Serial.println();
     }
 public:
-    MyMqtt(IPAddress ip, uint16_t port, std::function<void(char* topic, byte* payload, unsigned int length)> callBack) : obj(ip, port) {
-        obj.setCallback(callBack);
-        mac = ESP.getEfuseMac();
-        snprintf(clientId, sizeof(clientId), "%04X%08X", (uint16_t)(mac >> 32), (uint32_t)mac);
-    }
+    MyMqtt(WiFiClient netClient, IPAddress ip, uint16_t port, std::function<void(String)> callBack) :
+        obj(PubSubClient(ip, port, [](char* topic, byte* payload, unsigned int length) {}, netClient)) {}
+    // MyMqtt(EthernetClient netClient, IPAddress ip, uint16_t port, std::function<void(char* topic, byte* payload, unsigned int length)> callBack) :
+    //     obj(PubSubClient(ip, port, [](char* topic, byte* payload, unsigned int length) {}, netClient)) {}
     // 连接到 MQTT 代理
     bool connectToBroker(void) {
-        return obj.connect(mac);
+        return obj.connect("mymqttid");
     }
     // 订阅指定的主题
     bool subscribeTopic(const char* topic) {
