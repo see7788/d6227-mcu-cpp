@@ -251,7 +251,7 @@ void resTask(void* nullparam)
     myStruct_t reqStruct;
     auto sendToDebug = [&reqStruct, &resStruct](String str) {
       reqStruct.sendTo_name = std::get<3>(config.mcu_base);
-      concatAny(reqStruct.str, "[\"%s\",\"%s\"]", str.c_str(), resStruct.str.c_str());
+      concatAny(reqStruct.str, "[\"%s\",%s]", str.c_str(), resStruct.str.c_str());
       if (xQueueSend(state.reqQueueHandle, &reqStruct, 0) != pdPASS)
       {
         ESP_LOGD("resTask", "reqQueueHandle is full");
@@ -267,8 +267,8 @@ void resTask(void* nullparam)
       }
       else
       {
-        JsonObject root = resdoc.as<JsonObject>();
-        String api = root["api"].as<String>();
+        JsonArray root = resdoc.as<JsonArray>();
+        String api = root[0].as<String>();
         auto sendToFun = [root, &resStruct, &reqStruct]() {
           //arr.add(std::get<4>(config.mcu_base));
           reqStruct.sendTo_name = resStruct.sendTo_name;
@@ -282,8 +282,8 @@ void resTask(void* nullparam)
         {
           if (api == "mcu_state_get")
           {
-            root["api"].set("set");
-            JsonObject db = root.createNestedObject("db");
+            root[0].set("set");
+            JsonObject db = root.createNestedObject();
             config_get(db);
             JsonArray mcu_state = db.createNestedArray("mcu_state");
             uint32_t ulBits = xEventGroupGetBits(state.eg_Handle); // 获取 Event Group 变量当前值
@@ -307,16 +307,16 @@ void resTask(void* nullparam)
             sendToFun();
           }
           else if (api == "i18n_get") {
-            root["api"].set("set");
-            JsonObject db = root.createNestedObject("db");
+            root[0].set("set");
+            JsonObject db = root.createNestedObject();
             if (state.fsI18nObj->readFile(db))
               sendToFun();
             else
               sendToDebug("fsI18nObj->readFile error");
           }
           else if (api == "i18n_set") {
-            root["api"].set("set");
-            JsonObject db = root["db"].as<JsonObject>();
+            root[0].set("set");
+            JsonObject db = root[1].as<JsonObject>();
             if (state.fsI18nObj->writeFile(db))
               sendToFun();
             else
@@ -324,21 +324,21 @@ void resTask(void* nullparam)
           }
           else if (api == "config_set")
           {
-            JsonObject db = root["db"].as<JsonObject>();
+            JsonObject db = root[1].as<JsonObject>();
             config_set(db);
             sendToFun();
           }
           else if (api == "config_get")
           {
-            root["api"].set("config_set");
-            JsonObject db = root.createNestedObject("db");
+            root[0].set("config_set");
+            JsonObject db = root.createNestedObject();
             config_get(db);
             sendToFun();
           }
           else if (api == "config_toFileRestart")
           {
-            root["api"].set("config_set");
-            JsonObject db = root.createNestedObject("db");
+            root[0].set("config_set");
+            JsonObject db = root.createNestedObject();
             config_get(db);
             bool success = state.fsConfigObj->writeFile(db);
             if (success)
@@ -353,8 +353,8 @@ void resTask(void* nullparam)
           }
           else if (api == "config_fromFileRestart")
           {
-            root["api"].set("config_set");
-            JsonObject db = root.createNestedObject("db");
+            root[0].set("config_set");
+            JsonObject db = root.createNestedObject();
             bool success = state.fsConfigObj->readFile(db);
             if (success)
             {
@@ -501,21 +501,21 @@ void setup()
   xEventGroupWaitBits(state.eg_Handle, EGBIG_WSCLENT, pdFALSE, pdTRUE, portMAX_DELAY);
   ESP_LOGV("ETBIG", "EGBIG_WSCLENT");
 
-  a7129namespace::ybl::taskParam_t* yblTaskParam = new a7129namespace::ybl::taskParam_t{
-      .config = config.mcu_ybl,
-      .startCallBack = []()
-      { xEventGroupSetBits(state.eg_Handle, EGBIG_YBL); },
-      .tickCallBack = []()
-      {
-        myStruct_t* obj = new myStruct_t{
-          .sendTo_name = std::get<4>(config.mcu_dz003),
-          .str = "{\"api\":\"mcu_ybl\"}"
-        };
-        if (xQueueSend(state.resQueueHandle, &obj, 50) != pdPASS)
-           ESP_LOGV("debug", "Queue is full"); } };
-  xTaskCreate(a7129namespace::ybl::mainTask, "mcu_yblTask", 1024 * 6, (void*)yblTaskParam, state.taskindex++, NULL);
-  xEventGroupWaitBits(state.eg_Handle, EGBIG_YBL, pdFALSE, pdTRUE, portMAX_DELAY);
-  ESP_LOGV("ETBIG", "EGBIG_YBL");
+  // a7129namespace::ybl::taskParam_t* yblTaskParam = new a7129namespace::ybl::taskParam_t{
+  //     .config = config.mcu_ybl,
+  //     .startCallBack = []()
+  //     { xEventGroupSetBits(state.eg_Handle, EGBIG_YBL); },
+  //     .tickCallBack = []()
+  //     {
+  //       myStruct_t* obj = new myStruct_t{
+  //         .sendTo_name = std::get<4>(config.mcu_dz003),
+  //         .str = "[\"mcu_ybl\"]"
+  //       };
+  //       if (xQueueSend(state.resQueueHandle, &obj, 50) != pdPASS)
+  //          ESP_LOGV("debug", "Queue is full"); } };
+  // xTaskCreate(a7129namespace::ybl::mainTask, "mcu_yblTask", 1024 * 6, (void*)yblTaskParam, state.taskindex++, NULL);
+  // xEventGroupWaitBits(state.eg_Handle, EGBIG_YBL, pdFALSE, pdTRUE, portMAX_DELAY);
+  // ESP_LOGV("ETBIG", "EGBIG_YBL");
 
   dz003namespace::mainTaskParam_t* dz003TaskParam = new dz003namespace::mainTaskParam_t{
       .config = config.mcu_dz003,
@@ -525,7 +525,7 @@ void setup()
       {
         myStruct_t* obj = new myStruct_t{
           .sendTo_name = std::get<4>(config.mcu_dz003),
-          .str = "{\"api\":\"mcu_dz003\"}"
+          .str = "[\"mcu_dz003\"]"
         };
       if (xQueueSend(state.resQueueHandle, obj, 50) != pdPASS)
         ESP_LOGV("debug", "Queue is full"); } };

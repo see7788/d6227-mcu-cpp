@@ -620,18 +620,18 @@ namespace a7129namespace
             StrobeCMD(CMD_PLL);
             StrobeCMD(CMD_RX); // 设置为接收模式
         }
-        void res(JsonVariant refObj)
+        void res(JsonVariant ref)
         {
             datas_t& datas = datasRef();
-            JsonObject obj = refObj.as<JsonObject>();
-            String api = obj["api"].as<String>();
+            JsonArray c = ref.as<JsonArray>();
+            String api = c[0].as<String>();
             if (api.indexOf(".datas.clear") > -1)
             {
                 datas.clear();
-            }
-            obj["api"].set("mcu_yblState_set");
-            obj.remove("db");
-            JsonObject db = obj.createNestedObject("db");
+            }    
+            c.clear();
+            c[0].set("mcu_yblState_set");
+            JsonObject db = c.createNestedObject();
             JsonObject info = db.createNestedObject("mcu_yblState");
             // ESP_LOGV("TAG", "%i", datas.size());
             for (const auto& pair : datas)

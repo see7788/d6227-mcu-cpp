@@ -110,13 +110,13 @@ namespace dz003namespace
                 // CHANGE： 当引脚电平发生变化时触发中断服务程序
                 // RISING： 当引脚电平由低电平变为高电平时触发中断服务程序
                 // FALLING： 当引脚电平由高电平变为低电平时触发中断服务程序
-                // attachInterrupt(digitalPinToInterrupt(gpio[0]), frequencyvalue0_add, RISING);
-                // attachInterrupt(digitalPinToInterrupt(gpio[1]), frequencyvalue1_add, RISING);
+                attachInterrupt(digitalPinToInterrupt(gpio[0]), frequencyvalue0_add, RISING);
+                attachInterrupt(digitalPinToInterrupt(gpio[1]), frequencyvalue1_add, RISING);
             }
             else
             {
-                // detachInterrupt(gpio[0]);
-                // detachInterrupt(gpio[1]);
+                detachInterrupt(gpio[0]);
+                detachInterrupt(gpio[1]);
             }
         }
         frequency_t(int c0, int c1)
@@ -144,29 +144,29 @@ namespace dz003namespace
             deng.set(!c);
             frequency.set(c);
         }
-        void res(JsonVariant refObj)
+        void res(JsonVariant refArr)
         {
-            JsonObject obj = refObj.as<JsonObject>();
-            String api = obj["api"].as<String>();
+            JsonArray c = refArr.as<JsonArray>();
+            String api = c[0].as<String>();
             if (api.indexOf(".fa.set") > -1)
             {
-                fa.set(obj["db"].as<bool>());
+                fa.set(c[1].as<bool>());
             }
             else if (api.indexOf(".frequency.set") > -1)
             {
-                frequency.set(obj["db"].as<bool>());
+                frequency.set(c[1].as<bool>());
             }
             else if (api.indexOf(".laba.set") > -1)
             {
-                laba.set(obj["db"].as<bool>());
+                laba.set(c[1].as<bool>());
             }
             else if (api.indexOf(".deng.set") > -1)
             {
-                deng.set(obj["db"].as<bool>());
+                deng.set(c[1].as<bool>());
             }
-            obj["api"].set("mcu_dz003State_set");
-            obj.remove("db");
-            JsonObject db = obj.createNestedObject("db");
+            c.clear();
+            c[0].set("mcu_dz003State_set");
+            JsonObject db = c.createNestedObject();
             JsonObject info = db.createNestedObject("mcu_dz003State");
             JsonObject c1 = info.createNestedObject("fa");
             c1["working"] = fa.working;
