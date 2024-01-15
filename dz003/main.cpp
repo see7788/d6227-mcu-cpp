@@ -50,7 +50,7 @@ typedef struct
   MyServer::webPageConfig_t mcu_webPageServer;
   MyServer::wsConfig_t mcu_wsServer;
   MyServer::esConfig_t mcu_esServer;
-  myClientnamespace::WsClient::config_t mcu_wsClient;
+  // myClientnamespace::WsClient::config_t mcu_wsClient;
 } config_t;
 config_t config;
 typedef struct
@@ -66,7 +66,7 @@ typedef struct
   MyNet* netObj;
   HardwareSerial* serialObj;
   MyServer* myServerObj;
-  myClientnamespace::WsClient* wsClientObj;
+  // myClientnamespace::WsClient* wsClientObj;
   // myBlenamespace::Index* mcu_ble;
 } state_t;
 state_t state;
@@ -485,19 +485,19 @@ void setup()
   state.myServerObj->arduinoOtaInit([](const String& message) -> void
     { ESP_LOGV("debug", "%s", message); });
 
-  myClientnamespace::WsClient::param_t* wsTaskParam = new myClientnamespace::WsClient::param_t{
-     .config = config.mcu_wsClient,
-     .startCallBack = []() {
-      xEventGroupSetBits(state.eg_Handle, EGBIG_WSCLENT);},
-     .msgCallBack = [](String str)->void {
-        myStruct_t* obj = new myStruct_t{
-          .sendTo_name = std::get<0>(config.mcu_wsClient),
-          .str = str
-        };
-        if (xQueueSend(state.resQueueHandle, &obj, 50) != pdPASS)
-           ESP_LOGV("debug", "Queue is full"); } };
-  state.wsClientObj = new myClientnamespace::WsClient(wsTaskParam);
-  xTaskCreate(myClientnamespace::wsTask, "wsTask", 1024 * 6, (void*)state.wsClientObj, state.taskindex++, NULL);
+  // myClientnamespace::WsClient::param_t* wsTaskParam = new myClientnamespace::WsClient::param_t{
+  //    .config = config.mcu_wsClient,
+  //    .startCallBack = []() {
+  //     xEventGroupSetBits(state.eg_Handle, EGBIG_WSCLENT);},
+  //    .msgCallBack = [](String str)->void {
+  //       myStruct_t* obj = new myStruct_t{
+  //         .sendTo_name = std::get<0>(config.mcu_wsClient),
+  //         .str = str
+  //       };
+  //       if (xQueueSend(state.resQueueHandle, &obj, 50) != pdPASS)
+  //          ESP_LOGV("debug", "Queue is full"); } };
+  // state.wsClientObj = new myClientnamespace::WsClient(wsTaskParam);
+  // xTaskCreate(myClientnamespace::wsTask, "wsTask", 1024 * 6, (void*)state.wsClientObj, state.taskindex++, NULL);
   xEventGroupWaitBits(state.eg_Handle, EGBIG_WSCLENT, pdFALSE, pdTRUE, portMAX_DELAY);
   ESP_LOGV("ETBIG", "EGBIG_WSCLENT");
 
